@@ -15,7 +15,7 @@
   &nbsp;·&nbsp;
   <a href="docs/storage-format.md">Storage Format</a>
   &nbsp;·&nbsp;
-  <a href="docs/server-api.md">Server API</a>
+  <a href="docs/protocol.md">Protocol & API</a>
 </p>
 
 ## Keep the work, not the chat.
@@ -229,7 +229,7 @@ The **Loom Server is closed-source** and maintained in a separate repository. Cl
 - [Architecture & three-plane model](docs/architecture.md)
 - [End-to-end encryption](docs/end-to-end-encryption.md)
 - [Storage format specification](docs/storage-format.md)
-- [Server API specification](docs/server-api.md)
+- [Protocol & API specification](docs/protocol.md)
 
 ## Star History
 

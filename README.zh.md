@@ -15,7 +15,7 @@
   &nbsp;·&nbsp;
   <a href="docs/storage-format.md">存储格式</a>
   &nbsp;·&nbsp;
-  <a href="docs/server-api.md">服务端接口</a>
+  <a href="docs/protocol.md">协议与 API 规范</a>
 </p>
 
 ## Keep the work, not the chat.
@@ -228,7 +228,7 @@ Loom 复用了 [ds-harness-remote](https://github.com/liguobao/ds-harness-remote
 - [系统架构与三平面模型](docs/architecture.md)
 - [端到端加密规范](docs/end-to-end-encryption.md)
 - [存储格式规范](docs/storage-format.md)
-- [服务端 API 契约](docs/server-api.md)
+- [协议与 API 交互规范](docs/protocol.md)
 
 ## Star 趋势
 
