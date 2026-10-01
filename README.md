@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="docs/logo.svg" alt="Loom for DeepSeek Harness" width="600">
+</p>
+
+<p align="center">
   <strong>English</strong>
   &nbsp;·&nbsp;
   <a href="README.zh.md">中文</a>
@@ -9,7 +13,7 @@
   &nbsp;·&nbsp;
   <a href="docs/end-to-end-encryption.md">E2EE</a>
   &nbsp;·&nbsp;
-  <a href="docs/archive-format.md">Archive Format</a>
+  <a href="docs/storage-format.md">Storage Format</a>
   &nbsp;·&nbsp;
   <a href="docs/server-api.md">Server API</a>
 </p>
@@ -224,7 +228,7 @@ The **Loom Server is closed-source** and maintained in a separate repository. Cl
 - [Product specification](docs/product.md)
 - [Architecture & three-plane model](docs/architecture.md)
 - [End-to-end encryption](docs/end-to-end-encryption.md)
-- [Archive format specification](docs/archive-format.md)
+- [Storage format specification](docs/storage-format.md)
 - [Server API specification](docs/server-api.md)
 
 ## Star History

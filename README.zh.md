@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="docs/logo.svg" alt="Loom for DeepSeek Harness" width="600">
+</p>
+
+<p align="center">
   <a href="README.md">English</a>
   &nbsp;·&nbsp;
   <strong>中文</strong>
@@ -9,7 +13,7 @@
   &nbsp;·&nbsp;
   <a href="docs/end-to-end-encryption.md">端到端加密</a>
   &nbsp;·&nbsp;
-  <a href="docs/archive-format.md">归档规范</a>
+  <a href="docs/storage-format.md">存储格式</a>
   &nbsp;·&nbsp;
   <a href="docs/server-api.md">服务端接口</a>
 </p>
@@ -223,7 +227,7 @@ Loom 复用了 [ds-harness-remote](https://github.com/liguobao/ds-harness-remote
 - [产品规范与原则](docs/product.md)
 - [系统架构与三平面模型](docs/architecture.md)
 - [端到端加密规范](docs/end-to-end-encryption.md)
-- [归档格式规范](docs/archive-format.md)
+- [存储格式规范](docs/storage-format.md)
 - [服务端 API 契约](docs/server-api.md)
 
 ## Star 趋势
