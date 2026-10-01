@@ -145,21 +145,22 @@ source_conversation_count: 2
 以后可以考虑显式开启协作模式，但第一版不允许跨用户控制 Agent。
 ```
 
-## 快速开始
+## 安装
 
-### 安装与构建
+### 命令行安装
+
+通过 DSH 插件管理器为 `web` profile 添加：
 
 ```sh
-git clone https://github.com/liguobao/loom.git
-cd loom
-pnpm install
-pnpm build
+dsh plugin --profile web add -w @loom/client
 ```
 
-运行各组件测试：
+安装后请重启 Harness。
+
+也可以直接全局安装 Loom CLI：
 
 ```sh
-pnpm test
+npm install -g @loom/client
 ```
 
 ### CLI 命令

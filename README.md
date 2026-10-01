@@ -146,21 +146,22 @@ Rejected. Violates local-first guarantees and escalates privacy risk.
 Evaluate optional interactive collaboration mode in a future version.
 ```
 
-## Quick start
+## Install
 
-### Install and build
+### Command-line installation
+
+Add the package through DSH's plugin manager for the `web` profile:
 
 ```sh
-git clone https://github.com/liguobao/loom.git
-cd loom
-pnpm install
-pnpm build
+dsh plugin --profile web add -w @loom/client
 ```
 
-Run test suite across packages:
+Restart Harness after installation.
+
+Alternatively, install the standalone Loom CLI globally:
 
 ```sh
-pnpm test
+npm install -g @loom/client
 ```
 
 ### CLI commands
