@@ -214,7 +214,7 @@ Loom 复用了 [ds-harness-remote](https://github.com/liguobao/ds-harness-remote
 - `packages/client`：本地命令行工具（`loom`）与交互客户端 SDK。
 - `apps/web`：React 19 Web 前端管理看板。
 
-**Loom Server 属于闭源独立项目**，由单独仓库维护。开源客户端统一依照标准化的[服务端 API 契约文档](docs/server-api.md)与后端服务进行互操作对接。
+**Loom Server 属于闭源独立项目**，由单独仓库维护。开源客户端统一依照标准化的[协议与 API 交互规范文档](docs/protocol.md)与后端服务进行互操作对接。
 
 ## 安全与隐私
 

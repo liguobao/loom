@@ -215,7 +215,7 @@ This repository houses the open-source client-side ecosystem:
 - `packages/client`: Local CLI (`loom`) and SDK integration.
 - `apps/web`: React 19 web application.
 
-The **Loom Server is closed-source** and maintained in a separate repository. Client implementations interface with the server via the standardized [Server API specification](docs/server-api.md).
+The **Loom Server is closed-source** and maintained in a separate repository. Client implementations interface with the server via the standardized [Protocol & API specification](docs/protocol.md).
 
 ## Security
 
