@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.local
+data/loom.db
+data/loom.db-shm
+data/loom.db-wal
+data/organizations/
+*.js.map
+.DS_Store
+coverage/
+.turbo/
+apps/web/tsconfig.tsbuildinfo
+apps/web/dist/
