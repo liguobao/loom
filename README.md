@@ -153,15 +153,15 @@ Evaluate optional interactive collaboration mode in a future version.
 Add the package through DSH's plugin manager for the `web` profile:
 
 ```sh
-dsh plugin --profile web add -w @loom/client
+dsh plugin --profile web add -w dsh-loom
 ```
 
 Restart Harness after installation.
 
-Alternatively, install the standalone Loom CLI globally:
+Alternatively, install the standalone CLI globally:
 
 ```sh
-npm install -g @loom/client
+npm install -g dsh-loom
 ```
 
 ### CLI commands
@@ -212,7 +212,7 @@ This repository houses the open-source client-side ecosystem:
 - `packages/crypto`: Noise IK cipher implementation and token utilities.
 - `packages/db`: SQLite schema, query routines, and FTS5 search indexer.
 - `packages/distill`: Conversation distillation, Git context extraction, and secret redaction.
-- `packages/client`: Local CLI (`loom`) and SDK integration.
+- `packages/client` (`dsh-loom`): Local CLI (`loom` / `dsh-loom`) and SDK integration.
 - `apps/web`: React 19 web application.
 
 The **Loom Server is closed-source** and maintained in a separate repository. Client implementations interface with the server via the standardized [Protocol & API specification](docs/protocol.md).

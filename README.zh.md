@@ -152,15 +152,15 @@ source_conversation_count: 2
 通过 DSH 插件管理器为 `web` profile 添加：
 
 ```sh
-dsh plugin --profile web add -w @loom/client
+dsh plugin --profile web add -w dsh-loom
 ```
 
 安装后请重启 Harness。
 
-也可以直接全局安装 Loom CLI：
+也可以直接全局安装 CLI：
 
 ```sh
-npm install -g @loom/client
+npm install -g dsh-loom
 ```
 
 ### CLI 命令
@@ -211,7 +211,7 @@ Loom 复用了 [ds-harness-remote](https://github.com/liguobao/ds-harness-remote
 - `packages/crypto`：Noise IK 加解密协议实现与密钥管理工具。
 - `packages/db`：SQLite 建表管理、数据操作与 FTS5 全文索引构建器。
 - `packages/distill`：对话蒸馏、Git 变更提取与本地密钥脱敏引擎。
-- `packages/client`：本地命令行工具（`loom`）与交互客户端 SDK。
+- `packages/client`（`dsh-loom`）：本地命令行工具（`loom` / `dsh-loom`）与交互客户端 SDK。
 - `apps/web`：React 19 Web 前端管理看板。
 
 **Loom Server 属于闭源独立项目**，由单独仓库维护。开源客户端统一依照标准化的[协议与 API 交互规范文档](docs/protocol.md)与后端服务进行互操作对接。

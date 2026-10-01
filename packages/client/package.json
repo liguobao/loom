@@ -1,9 +1,10 @@
 {
-  "name": "@loom/client",
+  "name": "dsh-loom",
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "loom": "./dist/cli.js"
+    "loom": "./dist/cli.js",
+    "dsh-loom": "./dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
