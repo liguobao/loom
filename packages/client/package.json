@@ -1,25 +1,19 @@
 {
   "name": "dsh-loom",
   "version": "0.1.0",
+  "description": "Loom plugin for DeepSeek Harness — Keep the work, not the chat.",
   "type": "module",
-  "bin": {
-    "loom": "./dist/cli.js",
-    "dsh-loom": "./dist/cli.js"
-  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./cli": {
-      "import": "./dist/cli.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts src/cli.ts --format esm --dts",
-    "dev": "tsup src/index.ts src/cli.ts --format esm --dts --watch",
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -28,11 +22,6 @@
     "@loom/crypto": "workspace:*",
     "ulid": "^2.3.0",
     "ws": "^8.18.0",
-    "conf": "^13.0.0",
-    "chalk": "^5.3.0",
-    "ora": "^8.0.1",
-    "commander": "^12.1.0",
-    "inquirer": "^10.1.0",
     "gray-matter": "^4.0.3"
   },
   "devDependencies": {

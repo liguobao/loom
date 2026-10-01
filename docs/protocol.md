@@ -3,19 +3,19 @@
 状态：Draft v0.2  
 日期：2026-10-01  
 协议版本：`1`  
-适用范围：Loom Client、CLI、Web 前端与 Loom Server 之间的线协议规范（Server 闭源实现遵循此规范）。
+适用范围：Loom DSH 插件（`dsh-loom`）、Web 前端与 Loom Server 之间的线协议规范（Server 闭源实现遵循此规范）。
 
 ---
 
 ## 0. 规范地位与仓库边界
 
-本文是 Loom 客户端（`@loom/client`）、CLI（`loom`）、Web 界面（`@loom/web`）以及闭源 Loom Server 之间唯一的网络通信与数据交互协议契约。
+本文是 Loom 插件（`dsh-loom`）、Web 界面（`@loom/web`）以及闭源 Loom Server 之间唯一的网络通信与数据交互协议契约。
 
 - **开源仓库职责**：
   - `packages/protocol`：所有共享 TypeScript 类型定义、Zod 请求/响应校验 Schema、WebSocket 消息结构；
   - `packages/crypto`：端到端加密握手（Noise IK）、密钥派生与 Transport 加解密；
   - `packages/distill`：对话蒸馏、Git 上下文捕获与敏感信息脱敏；
-  - `packages/client`：本地客户端 SDK、CLI 与 Presence/E2EE 交互实现；
+  - `packages/client`（`dsh-loom`）：DeepSeek Harness 本地插件与交互客户端 SDK；
   - `apps/web`：React 19 Web 前端应用。
 - **闭源 Server 职责**：
   - 用户鉴权、团队成员与权限管理、机器与 Host 实例注册、在线状态广播、不透明 E2EE 密文中继路由、Markdown 文件存储与 SQLite FTS5 全文索引维护。

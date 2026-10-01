@@ -126,7 +126,7 @@ All three layers must pass. The Host local policy has final veto.
      ↑
 @loom/distill   ← @loom/protocol, gray-matter
      ↑
-@loom/client    ← @loom/protocol, @loom/crypto, @loom/distill, conf, ws
+dsh-loom        ← @loom/protocol, @loom/crypto, @loom/distill, ws
      ↑
 @loom/web       ← @loom/protocol, react, vite, tailwindcss
 ```
