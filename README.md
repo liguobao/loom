@@ -1,155 +1,80 @@
-# Loom
+<p align="center">
+  <strong>English</strong>
+  &nbsp;·&nbsp;
+  <a href="README.zh.md">中文</a>
+  &nbsp;·&nbsp;
+  <a href="docs/product.md">Product Spec</a>
+  &nbsp;·&nbsp;
+  <a href="docs/architecture.md">Architecture</a>
+  &nbsp;·&nbsp;
+  <a href="docs/end-to-end-encryption.md">E2EE</a>
+  &nbsp;·&nbsp;
+  <a href="docs/archive-format.md">Archive Format</a>
+  &nbsp;·&nbsp;
+  <a href="docs/server-api.md">Server API</a>
+</p>
 
-**Keep the work, not the chat.**
+## Watch the work while it happens. Keep only what matters afterward.
 
-Loom is a lightweight collaboration and project-memory layer for [DeepSeek Harness](https://github.com/liguobao/ds-harness). Developers keep working locally with their own machines, repositories, and conversations. Teammates can observe active work when permitted, while finished work is distilled locally into readable Markdown records that become searchable project memory.
+Keep the work, not the chat.
 
-→ [中文文档](./README.zh.md)
+Loom is a lightweight collaboration and project-memory layer built on top of [DeepSeek Harness (DSH)](https://github.com/liguobao/ds-harness). Team members continue working locally on their own machines, repositories, and native conversations. Teammates can observe active work when explicitly authorized, while finished work is distilled locally into durable Markdown records that become searchable team memory.
 
-## What it does
+The core transport and end-to-end security reuse the proven stack from [ds-harness-remote](https://github.com/liguobao/ds-harness-remote).
 
-1. **While you work** — team members can watch your live DSH session in read-only mode, with your permission, over an end-to-end encrypted channel.
-2. **After you finish** — the full conversation stays on your machine. Only a distilled Markdown work record is uploaded to the Loom Server, forming a searchable project knowledge base.
+## Features
 
-## What it does not do
+- **Watch in real time**: View a teammate's active DSH agent state and conversation stream live with owner consent.
+- **Privacy by default**: Live sessions use bidirectional end-to-end encryption (`Noise_IK_25519_ChaChaPoly_SHA256`). The server routes opaque ciphertext and cannot read prompts, responses, terminal output, or code.
+- **Local authority**: Host-local policy holds final veto over observation. Server ACL cannot force a local session to be shared.
+- **Durable project memory**: When work finishes, full noisy chat transcripts remain local. High-value engineering decisions are distilled into structured Markdown documents.
+- **Markdown as source of truth**: Archived records are stored as readable `.md` files on disk. SQLite serves solely as a disposable index and control plane.
+- **Local secret redaction**: API keys, tokens, SSH keys, passwords, and `.env` credentials are sanitized locally before Markdown records leave the machine.
+- **Non-intrusive workflow**: Keep using `cd project && dsh`. No mandatory cloud IDE, no forced task tickets, and no agent orchestration pipelines.
 
-Loom does not orchestrate agents, host IDEs, manage sprints, or monitor developer activity. It does not require a unified environment, does not upload raw conversations, and does not change how you use Git or DSH.
-
-## Relationship to DSH Remote
-
-Loom builds on top of [ds-harness-remote](https://github.com/liguobao/ds-harness-remote). The Remote project solves *"how do I continue using my own DSH from another device"*. Loom solves *"how does my team observe each other's work and retain project memory"*.
-
-Loom reuses Remote's mature transport stack:
-
-| Capability | Source |
-|---|---|
-| End-to-end encryption | Noise IK (`Noise_IK_25519_ChaChaPoly_SHA256`) via `@dsh-remote/crypto` |
-| Secure channel | WebSocket control channel + Noise transport |
-| Device identity | X25519 static key pairs, locally pinned |
-| Relay | Server routes opaque ciphertext; cannot read session content |
-| Presence | WebSocket-based online/offline and device metadata |
-
-The key difference is the trust boundary. Remote connects **my client → my host** within a single account. Loom connects **User A → User B's host** across an organization, adding membership, cross-user authorization, and the observer permission model.
-
-## Architecture
+## How it works
 
 ```text
-                       Loom
-                        │
-        ┌───────────────┼───────────────┐
-        │               │               │
-      Live           Archive         Control
-        │               │               │
-      E2EE           Markdown         SQLite
-        │               │               │
-  Local DSH Host    Project          Identity
-  Conversation       Memory          Topology
+Host DSH Machine (Local)             Loom Server (Opaque Relay)         Observer Client (Web/CLI)
+  DSH Agent / Local Session
+             │
+      Local Host Plugin
+   (E2EE Noise IK Encrypt) ─────────────► WSS Relay ─────────────► (E2EE Noise IK Decrypt)
+             │                          (Cannot Read)                      │
+    Work Complete (Local)                                            Read-only Live View
+             │
+  Distill + Secret Redact
+             │
+  Markdown Work Record ────────────────► Save to Disk (.md)
+  (Front Matter + Body)                  + SQLite FTS5 Index ────────► Search Project Memory
 ```
 
-### Live Plane
-
-Real-time presence and observer relay. Conversation streams are encrypted on the Host and decrypted only by the authorized Observer using Noise IK. The Server routes ciphertext; it cannot read prompts, agent output, tool calls, terminal content, workspace paths, or source code. See [End-to-end encryption](docs/end-to-end-encryption.md).
-
-### Archive Plane
-
-Markdown files on disk, one per work record. SQLite FTS5 provides a full-text search index on top. The Markdown file is the source of truth. If the database is lost, `loom reindex` rebuilds the index by scanning the files. See [Archive format](docs/archive-format.md).
-
-### Control Plane
-
-SQLite for identity, organization, workspace, project, machine, host instance, membership, and permissions. This is the only state the Server needs to persist in a database; work record content lives in Markdown files.
+The Loom Server does not need access to plaintext conversation histories. Live traffic passes through an encrypted tunnel, and historical archives consist strictly of distilled Markdown.
 
 ## Observer permission levels
 
 | Level | What others can see |
 |---|---|
-| `hidden` | Nothing. Host is invisible to the organization. |
-| `presence` | User is online, which project, working title, elapsed time. |
-| `observe` | Full read-only conversation stream over E2EE. |
+| `hidden` | Invisible. Host does not advertise active presence. |
+| `presence` | User is online, project slug, task title, and elapsed duration. |
+| `observe` | Full read-only conversation stream over end-to-end encryption. |
 
-Three checks must all pass before a connection is established:
+Connections require tripartite approval:
+1. **Server ACL**: Organization, workspace, and project membership.
+2. **Host Local Policy**: Explicit toggle and allowlist on the local computer.
+3. **Peer Identity**: Verified X25519 device public key pinning.
 
-1. **Server ACL** — organization/workspace/project membership and permission level.
-2. **Host local policy** — the Host owner controls sharing independently of the server.
-3. **Peer identity** — the Observer's device identity key must be known and authorized.
+The first version enforces strictly read-only observation. Observers cannot send prompts, approve actions, write files, or execute terminal commands.
 
-The Host local policy has final veto. The Server cannot override a Host that has disabled sharing.
+## Work record structure
 
-First version does not implement cross-user control (`send prompt`, `approve`, `terminal`, `write file`). Observer is strictly read-only.
-
-## Repository structure
+Work records are Markdown files with YAML front matter. The filesystem layout is:
 
 ```text
-loom/
-├── apps/
-│   └── web/             # React 19 frontend
-│
-├── packages/
-│   ├── protocol/        # Shared TypeScript types, Zod schemas, WebSocket message types
-│   ├── crypto/          # Noise IK E2EE (X25519 + ChaCha20-Poly1305 + HKDF-SHA256)
-│   ├── db/              # SQLite schema, queries, FTS5 full-text search, index rebuild
-│   ├── distill/         # Work Record generation, secret redaction, Git context
-│   └── client/          # Local CLI (loom command) and SDK
-│
-├── docs/
-│   ├── product.md           # Product specification
-│   ├── architecture.md      # Technical architecture
-│   ├── end-to-end-encryption.md
-│   ├── archive-format.md    # Work Record Markdown format
-│   └── server-api.md        # Server API contract (for Server implementors)
-│
-└── data/                # Runtime: SQLite DB + Markdown records (gitignored)
+data/organizations/<org-id>/workspaces/<ws-id>/projects/<proj-id>/records/<year>/<month>/<ulid>.md
 ```
 
-### Repository boundary
-
-This repository implements the local client packages (protocol, crypto, db, distill, client), the web frontend, and the protocol/API specifications. The **Loom Server is closed-source** and maintained separately. The Server API contract in `docs/server-api.md` is the interoperability specification between the client packages and the Server.
-
-## Getting started
-
-### Prerequisites
-
-- Node.js ≥ 22
-- pnpm ≥ 9
-
-### Install and build
-
-```bash
-git clone https://github.com/liguobao/loom
-cd loom
-pnpm install
-pnpm build
-```
-
-### CLI
-
-```bash
-# After build, the CLI is at packages/client/dist/cli.js
-node packages/client/dist/cli.js --help
-```
-
-| Command | Description |
-|---|---|
-| `loom login` | Sign in to a Loom Server |
-| `loom logout` | Sign out |
-| `loom whoami` | Show current user and server |
-| `loom init` | Bind current directory to a Loom Project |
-| `loom status` | Show current binding, login, and project state |
-| `loom search <query>` | Search work records |
-| `loom record list` | List recent work records for current project |
-| `loom record show <id>` | Show a work record |
-| `loom host register` | Register a local Host Instance |
-
-### Web frontend (development)
-
-```bash
-cd apps/web
-pnpm dev
-# http://localhost:5173 — requires a running Loom Server at localhost:3000
-```
-
-## Work record format
-
-Work records are Markdown files with YAML front matter. The file is the canonical content; the database stores only an index.
+Each record contains structured engineering context rather than conversational noise:
 
 ```markdown
 ---
@@ -173,120 +98,134 @@ source_conversation_count: 2
 # Add real-time observer capability for team members
 
 ## Goal
-
 Allow workspace members to observe an active DSH session in read-only mode.
 
 ## Outcome
-
 Completed read-only Observer mode with E2EE stream relay.
 
 ## Investigation
-
-Initially considered reusing the existing Remote Client permission model.
-Confirmed ds-harness-remote is currently based on same-account membership,
-so Loom needs organization-level membership and cross-user authorization.
+Evaluated ds-harness-remote single-account transport. Extended it with
+organization membership and cross-user authorization.
 
 ## Key Decisions
-
-- Real-time view is read-only by default.
-- Server routes ciphertext only — never decrypts content.
-- Host local policy has final veto.
-- Reuse existing Noise E2EE transport from ds-harness-remote.
+- Real-time observation is strictly read-only by default.
+- Server acts as an opaque ciphertext relay and never decrypts traffic.
+- Host-local policy holds final veto authority.
+- Retain Noise IK cipher suite from ds-harness-remote.
 
 ## Rejected Approaches
-
-### Sync full conversation to server
-
-Rejected. Increases privacy risk and violates Loom's local-first principle.
+### Synchronize full conversation transcripts to server
+Rejected. Violates local-first guarantees and escalates privacy risk.
 
 ## Changed Areas
-
 - packages/remote/observer.ts
 - apps/server/permissions.ts
 - apps/web/live-view.tsx
 
 ## Follow-ups
-
-Consider explicit Collaborate mode in a future version,
-but first version does not allow cross-user Agent control.
+Evaluate optional interactive collaboration mode in a future version.
 ```
 
-A work record must include at minimum: Title, Goal, Outcome, Key Decisions, Changed Areas, and Git context. Records that contain only a one-sentence summary do not meet the quality bar.
+## Quick start
 
-## Secret redaction
+### Install and build
 
-Before any Markdown leaves the local machine, the client scans for and replaces sensitive values with `[REDACTED]`:
+```sh
+git clone https://github.com/liguobao/loom.git
+cd loom
+pnpm install
+pnpm build
+```
 
-- API keys (`sk-*`, `ghp_*`, `AKIA*`, `github_pat_*`)
-- Passwords and database credentials in config
-- Private keys (RSA, EC, OpenSSH)
-- Bearer tokens
-- Cookie headers
-- `.env`-style `SECRET_KEY=value` patterns
-- Database connection strings with embedded credentials
+Run test suite across packages:
 
-The Server never receives raw conversation content. It receives only the already-redacted Markdown work record.
+```sh
+pnpm test
+```
+
+### CLI commands
+
+```sh
+# Authenticate
+loom login
+loom whoami
+
+# Project binding
+cd my-project
+loom init
+loom status
+
+# Project memory search
+loom search "reconnect websocket backoff"
+loom record list
+loom record show <record-id>
+
+# Host management
+loom host register
+```
+
+### Web dashboard
+
+```sh
+cd apps/web
+pnpm dev
+```
+
+Visit `http://localhost:5173` to explore project memory, inspect active works, and search past decisions.
 
 ## End-to-end encryption
 
-Loom reuses the `Noise_IK_25519_ChaChaPoly_SHA256` suite from [ds-harness-remote](https://github.com/liguobao/ds-harness-remote). The protocol, key lifecycle, handshake, replay protection, and visible metadata follow the same specification documented in [ds-harness-remote/docs/end-to-end-encryption.md](https://github.com/liguobao/ds-harness-remote/blob/main/docs/end-to-end-encryption.md).
+Loom shares the encryption suite with [ds-harness-remote](https://github.com/liguobao/ds-harness-remote):
 
-In the Loom context:
+- **Suite**: `Noise_IK_25519_ChaChaPoly_SHA256`
+- **Identity**: Pinned static X25519 public keys per device
+- **Handshake**: Initiator (Observer) encrypts to Host static key; Host responds with ephemeral key
+- **Transport**: Independent big-endian monotonic nonce counters with replay rejection
 
-- The **Observer** is the initiator (knows the Host's static public key).
-- The **Host** is the responder.
-- After handshake, the Host streams encrypted conversation chunks; the Observer decrypts locally.
-- The Server relays opaque ciphertext. It can observe connection metadata (who is connected to whom, timestamps, message sizes) but cannot read business content.
+Detailed specifications, key lifecycles, and security boundaries are documented in [End-to-end encryption](docs/end-to-end-encryption.md).
 
-## Data layout
+## Repository boundary
 
-```text
-data/
-├── loom.db
-└── organizations/
-    └── <org-id>/
-        └── workspaces/
-            └── <workspace-id>/
-                └── projects/
-                    └── <project-id>/
-                        └── records/
-                            └── 2026/
-                                └── 10/
-                                    └── 01KABC....md
-```
+This repository houses the open-source client-side ecosystem:
+- `packages/protocol`: Shared types, Zod schemas, and WebSocket contracts.
+- `packages/crypto`: Noise IK cipher implementation and token utilities.
+- `packages/db`: SQLite schema, query routines, and FTS5 search indexer.
+- `packages/distill`: Conversation distillation, Git context extraction, and secret redaction.
+- `packages/client`: Local CLI (`loom`) and SDK integration.
+- `apps/web`: React 19 web application.
 
-If `loom.db` is lost, the index can be rebuilt from the Markdown files. Markdown is the source of truth; the database is a disposable acceleration layer.
+The **Loom Server is closed-source** and maintained in a separate repository. Client implementations interface with the server via the standardized [Server API specification](docs/server-api.md).
 
-## Tech stack
+## Security
 
-| Component | Technology |
-|---|---|
-| Runtime | Node.js 22, TypeScript 5 |
-| Package manager | pnpm 9 (workspace monorepo) |
-| Crypto | `@noble/curves`, `@noble/ciphers`, `@noble/hashes` — Noise IK |
-| Database | better-sqlite3 (WAL mode, FTS5) |
-| Frontend | React 19, Vite 5, TailwindCSS 4, Zustand, TanStack Query |
-| Build | tsup |
-| IDs | ULID |
+- Session traffic is end-to-end encrypted. The relay server cannot read session payloads or private keys.
+- Secret redaction runs locally on the developer machine before records are written or uploaded.
+- Observers cannot execute shell commands, inject agent instructions, or approve tool invocations.
+- Deleting or rebuilding the SQLite database does not compromise Markdown records on disk.
 
-## Design principles
+## Documentation
 
-1. Put the work record first; conversation is raw material, not the deliverable.
-2. Make live observation explicit, contextual, and impossible without Host consent.
-3. Show connection and encryption state plainly, including offline, relay, and degraded states.
-4. Preserve the developer's existing local workflow; Loom is invisible during `cd project && dsh`.
-5. Keep remote observation within read-only boundaries; never imply that Loom grants control.
+- [Product specification](docs/product.md)
+- [Architecture & three-plane model](docs/architecture.md)
+- [End-to-end encryption](docs/end-to-end-encryption.md)
+- [Archive format specification](docs/archive-format.md)
+- [Server API specification](docs/server-api.md)
 
-## Anti-patterns
+## Star History
 
-Do not turn Loom into:
+<a href="https://www.star-history.com/?repos=liguobao%2Floom&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=liguobao/loom&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=liguobao/loom&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=liguobao/loom&type=date&legend=top-left" />
+ </picture>
+</a>
 
-- **Employee monitoring** — Presence is collaboration information, not a productivity metric. Do not surface "who worked how long" or "who used the most tokens".
-- **Agent orchestration** — Loom does not care what model, agent, or runtime the developer uses.
-- **A cloud IDE** — Development resources belong to the developer's local machine.
-- **A project management tool** — No Epics, Sprints, Stories, or approval chains. Use GitHub Issues, Linear, or Jira for that.
-- **A Codecast platform** — No session sync, remote steering, agent fork, or cloud runtime.
+## Project status and trademarks
+
+This is an independent open-source project designed for the DeepSeek Harness ecosystem.
+DeepSeek and related marks belong to their respective owners.
 
 ## License
 
-MIT
+[MIT](LICENSE)
