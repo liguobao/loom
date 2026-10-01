@@ -65,7 +65,7 @@ export async function archiveWork(options: ArchiveOptions): Promise<ArchiveResul
     repository: options.repository ?? gitContext.repository,
     branch: options.branch ?? gitContext.branch,
     baseCommit: options.baseCommit ?? gitContext.baseCommit,
-    finalCommit: options.finalCommit ?? gitContext.headCommit,
+    finalCommit: options.finalCommit ?? gitContext.finalCommit,
     tags: options.tags ?? [],
     sourceConversationCount: options.sourceConversationCount ?? 1,
   }

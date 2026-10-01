@@ -21,55 +21,6 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@22.20.4)(lightningcss@1.32.0)
 
-  apps/server:
-    dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.17
-        version: 1.19.17(hono@4.13.12)
-      '@loom/crypto':
-        specifier: workspace:*
-        version: link:../../packages/crypto
-      '@loom/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@loom/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-      better-sqlite3:
-        specifier: ^11.10.0
-        version: 11.10.0
-      dotenv:
-        specifier: ^16.6.1
-        version: 16.6.1
-      gray-matter:
-        specifier: ^4.0.3
-        version: 4.0.3
-      hono:
-        specifier: ^4.13.12
-        version: 4.13.12
-      ulid:
-        specifier: ^2.4.0
-        version: 2.4.0
-      ws:
-        specifier: ^8.22.0
-        version: 8.22.0
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
-      '@types/node':
-        specifier: ^22.20.4
-        version: 22.20.4
-      '@types/ws':
-        specifier: ^8.18.2
-        version: 8.18.2
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.28)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   apps/web:
     dependencies:
       '@loom/protocol':
@@ -625,12 +576,6 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
-
-  '@hono/node-server@1.19.17':
-    resolution: {integrity: sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ==}
-    engines: {node: '>=18.14.1'}
-    peerDependencies:
-      hono: ^4
 
   '@inquirer/checkbox@2.5.0':
     resolution: {integrity: sha512-sMgdETOfi2dUHT8r7TT1BTKOwNvdDGFDXYWtQ2J69SvlYNntk9I/gJe7r5yvMwwsuKnYbuRs3pNhx4tgNck5aA==}
@@ -1217,10 +1162,6 @@ packages:
     resolution: {integrity: sha512-1gxPBJpI/pcjQhKgIU91II6Wkay+dLcN3M6rf2uwP8hRur3HtQXjVrdAK3sjC0piaEuxzMwjXChcETiJl47lAQ==}
     engines: {node: '>=18'}
 
-  dotenv@16.6.1:
-    resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
-    engines: {node: '>=12'}
-
   electron-to-chromium@1.5.443:
     resolution: {integrity: sha512-TDJG36L9A3CWWwZ97HKaE+Iz1sW80pNp6sAU0owzCIV3Zc9eVyRqZK8Vz6NKuMIU8WjP0pIkoqCa0VRf/yFD0Q==}
 
@@ -1328,10 +1269,6 @@ packages:
   gray-matter@4.0.3:
     resolution: {integrity: sha512-5v6yZd4JK3eMI3FqqCouswVqwugaA9r4dNZB1wwcmrD02QkV5H0y7XBQW8QwQqEaZY1pM9aqORSORhJRdNK44Q==}
     engines: {node: '>=6.0'}
-
-  hono@4.13.12:
-    resolution: {integrity: sha512-6E2QDAc9Ick9Sq77ZrGS/dk2WUYni91aufTw6LJKpV7w8kW5/GxVUc650FOADOmlwg3K+f7Pun6XlV+pYmW6gw==}
-    engines: {node: '>=16.9.0'}
 
   iconv-lite@0.4.24:
     resolution: {integrity: sha512-v3MXnZAcvnywkTUEZomIActle7RXXeedOR31wwl7VlyoXO4Qi9arvSenNQWne1TcRwhCL1HwLI21bEqdpj8/rA==}
@@ -2264,10 +2201,6 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@hono/node-server@1.19.17(hono@4.13.12)':
-    dependencies:
-      hono: 4.13.12
-
   '@inquirer/checkbox@2.5.0':
     dependencies:
       '@inquirer/core': 9.2.1
@@ -2816,8 +2749,6 @@ snapshots:
     dependencies:
       type-fest: 4.41.0
 
-  dotenv@16.6.1: {}
-
   electron-to-chromium@1.5.443: {}
 
   emoji-regex@10.6.0: {}
@@ -2949,8 +2880,6 @@ snapshots:
       kind-of: 6.0.3
       section-matter: 1.0.0
       strip-bom-string: 1.0.0
-
-  hono@4.13.12: {}
 
   iconv-lite@0.4.24:
     dependencies:

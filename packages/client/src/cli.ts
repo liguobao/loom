@@ -71,7 +71,7 @@ program
       },
     ])
 
-    const answers = await inquirer.prompt([
+    const answers = (await inquirer.prompt([
       { type: 'input', name: 'username', message: '用户名:' },
       { type: 'password', name: 'password', message: '密码:', mask: '*' },
       ...(action === '注册新账号'
@@ -80,7 +80,12 @@ program
             { type: 'input', name: 'email', message: '邮箱:' },
           ]
         : []),
-    ])
+    ] as any)) as {
+      username: string
+      password: string
+      displayName?: string
+      email?: string
+    }
 
     const spinner = ora('连接到 Loom Server...').start()
     try {
@@ -88,8 +93,8 @@ program
       if (action === '注册新账号') {
         result = await register({
           username: answers.username,
-          displayName: answers.displayName,
-          email: answers.email,
+          displayName: answers.displayName || answers.username,
+          email: answers.email || '',
           password: answers.password,
         })
       } else {
