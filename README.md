@@ -14,13 +14,29 @@
   <a href="docs/server-api.md">Server API</a>
 </p>
 
-## Watch the work while it happens. Keep only what matters afterward.
+## Keep the work, not the chat.
 
-Keep the work, not the chat.
+Watch the work while it happens. Keep only what matters afterward.
 
-Loom is a lightweight collaboration and project-memory layer built on top of [DeepSeek Harness (DSH)](https://github.com/liguobao/ds-harness). Team members continue working locally on their own machines, repositories, and native conversations. Teammates can observe active work when explicitly authorized, while finished work is distilled locally into durable Markdown records that become searchable team memory.
+Loom (Loom for DeepSeek Harness) is a lightweight collaboration and project-memory layer built on top of **DeepSeek Harness (DSH) local workflows**.
 
-The core transport and end-to-end security reuse the proven stack from [ds-harness-remote](https://github.com/liguobao/ds-harness-remote).
+It is not a new IDE, nor is it another Agent orchestration platform.
+
+Team members continue to:
+
+- Develop locally on their own computers;
+- Use their own local Git repositories;
+- Run DeepSeek Harness normally;
+- Use their preferred models and tools;
+- Execute terminals, file operations, tests, and code changes locally;
+- Retain full conversations on their own machines.
+
+Loom preserves this workflow entirely and adds only two core capabilities:
+
+1. **While work happens**: Team members can view a colleague's current local DSH Agent status and conversation in real time with explicit permission.
+2. **After work completes**: The full conversation remains local, while only distilled high-value engineering records are uploaded to the Loom Server as Markdown, building searchable and traceable team project memory.
+
+Core transport and end-to-end encryption reuse the proven stack from [ds-harness-remote](https://github.com/liguobao/ds-harness-remote).
 
 ## Features
 

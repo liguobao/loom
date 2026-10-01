@@ -14,11 +14,27 @@
   <a href="docs/server-api.md">服务端接口</a>
 </p>
 
-## 工作进行时实时观察，工作结束后保留精华。
+## Keep the work, not the chat.
 
-保留工作成果，而不是聊天记录。
+Watch the work while it happens. Keep only what matters afterward.
 
-Loom 是建立在 [DeepSeek Harness (DSH)](https://github.com/liguobao/ds-harness) 本地工作流之上的轻量团队协作与项目记忆层。团队成员仍然在本地电脑上工作，使用自己的本地仓库、模型和原生 Conversation。团队成员可以在获得授权后实时观察当前进行的工作；工作结束后，系统会在本地将高价值工程决策提炼为 Markdown 记录，沉淀为团队可检索、可回溯的项目记忆。
+Loom（Loom for DeepSeek Harness）是建立在 **DeepSeek Harness（DSH）本地工作流之上的轻量团队协作与项目记忆层**。
+
+它不是新的 IDE，也不是新的 Agent 平台。
+
+团队成员仍然：
+
+- 在自己的本地电脑开发；
+- 使用自己的本地 Git 仓库；
+- 正常使用 DeepSeek Harness；
+- 使用自己习惯的模型和工具；
+- 在本地执行 Terminal、文件操作、测试和代码修改；
+- 在本地保存完整 Conversation。
+
+Loom 不改变这个工作方式，只补充两类能力：
+
+1. **工作进行时**，团队成员可以在权限允许的情况下实时查看另一个成员当前本地 DSH Agent 的工作状态和 Conversation。
+2. **工作结束后**，完整 Conversation 仍留在用户本地，只把压缩后的高价值工程记录以 Markdown 形式上传到 Loom Server，形成团队可搜索、可回溯的项目记忆。
 
 底层通信与端到端安全传输复用自 [ds-harness-remote](https://github.com/liguobao/ds-harness-remote) 的成熟实现。
 
