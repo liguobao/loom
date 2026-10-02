@@ -6,10 +6,10 @@ import matter from 'gray-matter'
 
 export interface WorkRecordMeta {
   id: string
-  organization: string
   workspace: string
   project: string
-  owner: string
+  organization?: string
+  owner?: string
   createdAt: string
   completedAt?: string
   repository?: string
@@ -64,19 +64,28 @@ export function generateMarkdown(input: WorkRecordInput): string {
   // 构造 Front Matter 对象（gray-matter 会负责序列化）
   const frontMatter: Record<string, unknown> = {
     id: meta.id,
-    organization: meta.organization,
     workspace: meta.workspace,
     project: meta.project,
-    owner: meta.owner,
     created_at: meta.createdAt,
   }
+  if (meta.organization) frontMatter.organization = meta.organization
+  if (meta.owner) frontMatter.owner = meta.owner
+
   if (meta.completedAt) frontMatter.completed_at = meta.completedAt
   if (meta.repository) frontMatter.repository = meta.repository
   if (meta.branch) frontMatter.branch = meta.branch
   if (meta.baseCommit) frontMatter.base_commit = meta.baseCommit
   if (meta.finalCommit) frontMatter.final_commit = meta.finalCommit
-  frontMatter.tags = meta.tags
-  frontMatter.source_conversation_count = meta.sourceConversationCount
+  frontMatter.tags = meta.tags ?? []
+  frontMatter.source_conversation_count = meta.sourceConversationCount ?? 0
+
+  // 严格过滤所有 undefined 属性，防止 js-yaml dump 报错
+  const cleanFrontMatter: Record<string, unknown> = {}
+  for (const [key, val] of Object.entries(frontMatter)) {
+    if (val !== undefined) {
+      cleanFrontMatter[key] = val
+    }
+  }
 
   // 格式化 changedAreas 为 bullet list
   const changedAreasText =
@@ -118,8 +127,9 @@ export function generateMarkdown(input: WorkRecordInput): string {
   ].join('\n')
 
   // 使用 gray-matter stringify 生成带 front matter 的文档
-  return matter.stringify(body, frontMatter)
+  return matter.stringify(body, cleanFrontMatter)
 }
+
 
 // ──────────────────────────────────────────────
 // parseMarkdown

@@ -5,4 +5,4 @@
       name: dsh-loom
       config:
         enabled: true
-        autoPresence: true
+        autoArchiveOnDispose: true

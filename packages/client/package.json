@@ -27,7 +27,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "ulid": "^2.3.0",
@@ -40,7 +41,8 @@
     "@loom/crypto": "workspace:*",
     "@types/ws": "^8.5.12",
     "tsup": "^8.2.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.1 <5"

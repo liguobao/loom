@@ -10,6 +10,14 @@
       "apiVersion": "v1alpha1"
     }
   },
+  "contributes": {
+    "commands": [
+      {
+        "id": "loom",
+        "title": "Summarize and archive current DeepSeek conversation to local Markdown"
+      }
+    ]
+  },
   "license": "MIT",
   "source": {
     "repository": "https://github.com/liguobao/loom"

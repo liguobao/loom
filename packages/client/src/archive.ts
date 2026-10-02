@@ -1,23 +1,23 @@
 /**
- * Loom Client Archive - 本地生成并上传 Work Record
+ * Loom Local Archive - 本地总结、脱敏并存储 Work Record
+ * 纯本地运行，不依赖 Server 端
+ * 存储格式: <userDir>/<workspace>/<project>/<timestamp-id>.md
  */
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
-import { getConfig } from './config.js'
-import { uploadWorkRecord } from './api.js'
+import { writeFile, mkdir } from 'node:fs/promises'
+import { join, dirname, basename, resolve } from 'node:path'
+import { homedir } from 'node:os'
 import { redactSecrets, generateMarkdown, distillConversation, getGitContext } from '@loom/distill'
 import { ulid } from 'ulid'
-import type { WorkRecordMeta } from '@loom/distill'
-import type { ConversationMessage } from '@loom/distill'
+import type { WorkRecordMeta, ConversationMessage } from '@loom/distill'
 
 export interface ArchiveOptions {
-  projectId: string
-  organizationId: string
-  workspaceId: string
-  title: string
   conversations: ConversationMessage[]
+  title?: string
+  workspace?: string
+  project?: string
   cwd?: string
-  // 手动覆盖 Git 信息
+  outputDir?: string
+  // 可选 Git 信息覆盖
   repository?: string
   branch?: string
   baseCommit?: string
@@ -28,49 +28,100 @@ export interface ArchiveOptions {
 
 export interface ArchiveResult {
   recordId: string
+  workspace: string
+  project: string
   relativePath: string
   localPath: string
+  title: string
   redactedCount: number
-  uploaded: boolean
 }
 
 /**
- * 执行完整的本地归档流程:
- * 1. 读取 Git context
- * 2. 从 conversation 中 distill work record
- * 3. 生成 Markdown
- * 4. Secret Redaction
- * 5. 保存到本地
- * 6. 上传到 Loom Server
+ * 推导 workspace 与 project 名称
+ */
+export function resolveWorkspaceAndProject(
+  cwd: string = process.cwd(),
+  explicit?: { workspace?: string; project?: string },
+): { workspace: string; project: string } {
+  if (explicit?.workspace && explicit?.project) {
+    return { workspace: explicit.workspace, project: explicit.project }
+  }
+
+  const normalizedCwd = resolve(cwd)
+  const currentDir = basename(normalizedCwd)
+  const parentDir = basename(dirname(normalizedCwd))
+
+  // 避免将根目录或系统目录识别为 workspace
+  const isSystemParent = !parentDir || parentDir === '/' || parentDir === '.' || parentDir === 'home' || parentDir === 'root'
+
+  const project = explicit?.project || currentDir || 'default-project'
+  const workspace = explicit?.workspace || (isSystemParent ? 'default' : parentDir)
+
+  return { workspace, project }
+}
+
+/**
+ * 格式化时间戳为文件名友好的字符串: YYYY-MM-DD-HHmmss
+ */
+function formatTimestamp(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const y = date.getFullYear()
+  const m = pad(date.getMonth() + 1)
+  const d = pad(date.getDate())
+  const hh = pad(date.getHours())
+  const mm = pad(date.getMinutes())
+  const ss = pad(date.getSeconds())
+  return `${y}-${m}-${d}-${hh}${mm}${ss}`
+}
+
+/**
+ * 获取本地归档基础存储目录 (默认: ~/.loom/records)
+ */
+export function getDefaultStorageDir(): string {
+  const custom = process.env['LOOM_STORAGE_DIR'] || process.env['LOOM_OUTPUT_DIR']
+  if (custom) return custom
+  return join(homedir(), '.loom', 'records')
+}
+
+/**
+ * 执行本地对话总结与归档:
+ * 1. 提取/推导 workspace 和 project
+ * 2. 读取当前目录 Git context
+ * 3. 使用 distillConversation 总结对话 (Goal, Outcome, Key Decisions, Changed Areas, Follow-ups)
+ * 4. 生成标准 Markdown (带 Front Matter)
+ * 5. 执行敏感信息正则脱敏 (redactSecrets)
+ * 6. 保存到用户文件夹下: <outputDir>/<workspace>/<project>/<timestamp-id>.md
  */
 export async function archiveWork(options: ArchiveOptions): Promise<ArchiveResult> {
-  const config = getConfig()
   const cwd = options.cwd ?? process.cwd()
+  const { workspace, project } = resolveWorkspaceAndProject(cwd, {
+    workspace: options.workspace,
+    project: options.project,
+  })
 
   // 1. 获取 Git context
   const gitContext = await getGitContext(cwd)
 
-  // 2. 生成 Work Record ID
+  // 2. 生成唯一记录 ID
   const recordId = ulid()
-  const now = new Date().toISOString()
+  const now = new Date()
+  const nowIso = now.toISOString()
 
   const meta: WorkRecordMeta = {
     id: recordId,
-    organization: options.organizationId,
-    workspace: options.workspaceId,
-    project: options.projectId,
-    owner: config.userId!,
-    createdAt: now,
-    completedAt: now,
+    workspace,
+    project,
+    createdAt: nowIso,
+    completedAt: nowIso,
     repository: options.repository ?? gitContext.repository,
     branch: options.branch ?? gitContext.branch,
     baseCommit: options.baseCommit ?? gitContext.baseCommit,
     finalCommit: options.finalCommit ?? gitContext.finalCommit,
     tags: options.tags ?? [],
-    sourceConversationCount: options.sourceConversationCount ?? 1,
+    sourceConversationCount: options.sourceConversationCount ?? options.conversations.length,
   }
 
-  // 3. Distill conversation
+  // 3. 提炼并总结对话
   const { workRecord } = distillConversation({
     conversations: options.conversations,
     meta,
@@ -83,51 +134,32 @@ export async function archiveWork(options: ArchiveOptions): Promise<ArchiveResul
     },
   })
 
-  // 4. 生成 Markdown
+  // 4. 生成规范 Markdown
   const rawMarkdown = generateMarkdown(workRecord)
 
-  // 5. Secret Redaction (在本地执行，不依赖服务端)
+  // 5. 敏感信息脱敏
   const { content: redactedMarkdown, redactedCount } = redactSecrets(rawMarkdown)
 
-  // 6. 确定路径
-  const dateObj = new Date()
-  const year = dateObj.getFullYear()
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
-  const relativePath = `organizations/${options.organizationId}/workspaces/${options.workspaceId}/projects/${options.projectId}/records/${year}/${month}/${recordId}.md`
+  // 6. 确定存储路径: <workspace>/<project>/<timestamp-shortId>.md
+  const timeStr = formatTimestamp(now)
+  const shortId = recordId.slice(-6).toLowerCase()
+  const filename = `${timeStr}-${shortId}.md`
+  const relativePath = `${workspace}/${project}/${filename}`
 
-  // 7. 保存本地副本 (可选，默认保存到 ~/.local/share/loom/records)
-  const localPath = join(process.env['HOME'] ?? '~', '.local', 'share', 'loom', relativePath)
+  const baseDir = options.outputDir ?? getDefaultStorageDir()
+  const localPath = join(baseDir, relativePath)
+
+  // 7. 写入本地文件
   await mkdir(dirname(localPath), { recursive: true })
   await writeFile(localPath, redactedMarkdown, 'utf-8')
 
-  // 8. 上传到 Server
-  let uploaded = false
-  try {
-    await uploadWorkRecord({
-      projectId: options.projectId,
-      organizationId: options.organizationId,
-      workspaceId: options.workspaceId,
-      title: workRecord.title ?? options.title,
-      repository: meta.repository,
-      branch: meta.branch,
-      baseCommit: meta.baseCommit,
-      finalCommit: meta.finalCommit,
-      tags: meta.tags,
-      changedAreas: workRecord.changedAreas ?? [],
-      sourceConversationCount: meta.sourceConversationCount,
-      markdownContent: redactedMarkdown,
-    })
-    uploaded = true
-  } catch (err) {
-    // 上传失败时不影响本地保存，记录警告
-    console.warn('[loom] Failed to upload work record:', err instanceof Error ? err.message : err)
-  }
-
   return {
     recordId,
+    workspace,
+    project,
     relativePath,
     localPath,
+    title: workRecord.title || options.title || 'Untitled Work',
     redactedCount,
-    uploaded,
   }
 }
