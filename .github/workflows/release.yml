@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: true
+
+jobs:
+  release:
+    name: Build, release and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Validate version tag
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises'
+
+          const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'))
+          const root = await readJson('package.json')
+          const client = await readJson('packages/client/package.json')
+          const expectedTag = `v${client.version}`
+
+          if (root.version !== client.version) {
+            throw new Error(`Root version (${root.version}) and client version (${client.version}) do not match`)
+          }
+          if (process.env.GITHUB_REF_NAME !== expectedTag) {
+            throw new Error(`Expected tag ${expectedTag}, received ${process.env.GITHUB_REF_NAME}`)
+          }
+          console.log(`Validated release tag ${expectedTag} matching package version ${client.version}`)
+          NODE
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check types
+        run: pnpm -r typecheck
+
+      - name: Run tests
+        run: pnpm -r test
+
+      - name: Build workspace
+        run: NODE_ENV=production pnpm -r build
+
+      - name: Pack plugin and assets
+        run: |
+          mkdir -p release-assets
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # 打包 dsh-loom 插件
+          pnpm --dir packages/client pack --pack-destination "$GITHUB_WORKSPACE/release-assets"
+
+          # 打包 web dashboard 前端产物
+          if [ -d "apps/web/dist" ]; then
+            tar -czf "$GITHUB_WORKSPACE/release-assets/loom-web-${VERSION}.tar.gz" -C apps/web/dist .
+          fi
+
+          # 生成 SHA256 校验和
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+
+      - name: Publish to GitHub npm registry (GitHub Packages)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_SCOPE="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          PACKAGE_NAME="@${PACKAGE_SCOPE}/dsh-loom"
+          NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/github-packages.npmrc"
+          export NPM_CONFIG_USERCONFIG PACKAGE_NAME
+
+          printf '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\n' > "$NPM_CONFIG_USERCONFIG"
+          printf '@%s:registry=https://npm.pkg.github.com\n' "$PACKAGE_SCOPE" >> "$NPM_CONFIG_USERCONFIG"
+
+          echo "Checking if $PACKAGE_NAME@$VERSION already exists on GitHub Packages..."
+          if npm view "$PACKAGE_NAME@$VERSION" --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+            echo "Version $VERSION already exists on GitHub Packages, skipping publish."
+            exit 0
+          fi
+
+          GITHUB_PACKAGE_DIR="$RUNNER_TEMP/github-package"
+          mkdir -p "$GITHUB_PACKAGE_DIR"
+          tar -xzf "release-assets/dsh-loom-$VERSION.tgz" -C "$GITHUB_PACKAGE_DIR"
+
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises'
+
+          const packageJsonPath = `${process.env.RUNNER_TEMP}/github-package/package/package.json`
+          const manifest = JSON.parse(await readFile(packageJsonPath, 'utf8'))
+          manifest.name = process.env.PACKAGE_NAME
+          manifest.publishConfig = {
+            ...(manifest.publishConfig ?? {}),
+            registry: 'https://npm.pkg.github.com',
+          }
+          await writeFile(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`)
+          NODE
+
+          npm publish "$GITHUB_PACKAGE_DIR/package" --registry=https://npm.pkg.github.com --access public
+          echo "Successfully published $PACKAGE_NAME@$VERSION to GitHub Packages"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

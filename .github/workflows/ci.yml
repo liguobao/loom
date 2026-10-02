@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   pull_request:
   workflow_dispatch:
 
@@ -44,13 +42,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check types
-        run: pnpm typecheck
+        run: pnpm -r typecheck
 
       - name: Run tests
-        run: pnpm test
+        run: pnpm -r test
 
       - name: Build workspace
-        run: NODE_ENV=production pnpm build
+        run: NODE_ENV=production pnpm -r build
 
   package:
     name: Package workspace artifacts
@@ -76,20 +74,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build workspace
-        run: NODE_ENV=production pnpm build
+        run: NODE_ENV=production pnpm -r build
 
-      - name: Pack npm packages
+      - name: Pack plugin artifact
         run: |
           mkdir -p artifacts/packages
-          for package_json in packages/*/package.json; do
-            package_dir="${package_json%/package.json}"
-            pnpm --dir "$package_dir" pack --pack-destination "$GITHUB_WORKSPACE/artifacts/packages"
-          done
+          pnpm --dir packages/client pack --pack-destination "$GITHUB_WORKSPACE/artifacts/packages"
 
-      - name: Upload npm packages
+      - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: loom-packages-${{ github.sha }}
+          name: dsh-loom-${{ github.sha }}
           path: artifacts/packages/**/*.tgz
           if-no-files-found: error
           retention-days: 14
