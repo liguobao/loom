@@ -7,6 +7,16 @@
     "apps/*",
     "packages/*"
   ],
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r --sequential build",

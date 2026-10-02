@@ -1,0 +1,9 @@
+# GitHub installs / local workspaces resolve this repository's root package.
+# Keep this patch at the root and point it at the package/plugin id so DSH
+# can recognize and load the repository directly as a bundle.
+- insert:
+    - id: dsh-loom
+      name: dsh-loom
+      config:
+        enabled: true
+        autoPresence: true

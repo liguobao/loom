@@ -1,0 +1,8 @@
+# dsh-loom profile patch — applied as a bundle layer so the plugin is
+# inserted into the composed profile tree with its default config.
+- insert:
+    - id: dsh-loom
+      name: dsh-loom
+      config:
+        enabled: true
+        autoPresence: true
