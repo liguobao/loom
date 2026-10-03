@@ -59,6 +59,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile || pnpm install
 
+      - name: Build workspace
+        run: NODE_ENV=production pnpm -r build
 
       - name: Check types
         run: pnpm -r typecheck
@@ -66,8 +68,6 @@ jobs:
       - name: Run tests
         run: pnpm -r test
 
-      - name: Build workspace
-        run: NODE_ENV=production pnpm -r build
 
       - name: Pack plugin and assets
         run: |
