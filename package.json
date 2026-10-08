@@ -23,7 +23,8 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "clean": "pnpm -r --parallel clean"
+    "clean": "pnpm -r --parallel clean",
+    "cli": "pnpm --filter loom-cli exec node dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -32,7 +33,8 @@
     "vitest": "^2.0.0"
   },
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=22.18.0",
     "pnpm": ">=9.0.0"
-  }
+  },
+  "packageManager": "pnpm@9.15.4"
 }

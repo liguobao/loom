@@ -45,8 +45,12 @@ jobs:
           const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'))
           const root = await readJson('package.json')
           const client = await readJson('packages/client/package.json')
+          const cli = await readJson('packages/cli/package.json')
           const expectedTag = `v${client.version}`
 
+          if (cli.version !== root.version) {
+            throw new Error(`CLI version (${cli.version}) and root version (${root.version}) do not match`)
+          }
           if (root.version !== client.version) {
             throw new Error(`Root version (${root.version}) and client version (${client.version}) do not match`)
           }
@@ -69,13 +73,16 @@ jobs:
         run: pnpm -r test
 
 
-      - name: Pack plugin and assets
+      - name: Pack CLI, plugin and assets
         run: |
           mkdir -p release-assets
           VERSION="${GITHUB_REF_NAME#v}"
 
           # 打包 dsh-loom 插件
           pnpm --dir packages/client pack --pack-destination "$GITHUB_WORKSPACE/release-assets"
+
+          # 打包独立 TypeScript CLI
+          pnpm --dir packages/cli pack --pack-destination "$GITHUB_WORKSPACE/release-assets"
 
           # 打包 web dashboard 前端产物
           if [ -d "apps/web/dist" ]; then

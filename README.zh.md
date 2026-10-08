@@ -147,6 +147,25 @@ source_conversation_count: 2
 
 ## 安装
 
+### CLI 安装与定时归档
+
+新增独立 TypeScript CLI，基于 [huihua](https://github.com/wibus-wee/huihua) 收集 Codex、Claude、Cursor、DeepSeek Harness 等工具的本地会话。需要 Node.js **22.18+**。
+
+从 GitHub Release 下载 `loom-cli-<版本>.tgz` 后安装：
+
+```sh
+npm install -g ./loom-cli-0.1.0.tgz
+cd /path/to/project
+loom init --providers codex,claude,deepseek --interval 300
+loom archive                 # 立即归档一次
+loom schedule install        # 安装并启动后台定时归档（macOS / Linux）
+loom schedule status
+```
+
+前台运行可使用 `loom watch`；删除后台服务使用 `loom schedule uninstall`。默认每 300 秒扫描一次，仅归档当前工作区及其子目录的会话。记录保存在 `~/.loom/records/<项目名>-<工作区哈希>/`，同一会话更新同一份脱敏 Markdown，未变化的会话自动跳过。原始会话仍留在本地，不上传服务器。
+
+源码安装、自定义会话路径、Windows 调度方式和配置说明见 [CLI 文档](packages/cli/README.md)。CLI 包已接入 CI/Release 打包；npm 公共仓库发布后也可通过 `npm install -g loom-cli` 安装。
+
 ### 插件安装
 
 通过 DSH 插件管理器为 `web` profile 添加：
@@ -184,6 +203,7 @@ Loom 复用了 [ds-harness-remote](https://github.com/liguobao/ds-harness-remote
 - `packages/crypto`：Noise IK 加解密协议实现与密钥管理工具。
 - `packages/db`：SQLite 建表管理、数据操作与 FTS5 全文索引构建器。
 - `packages/distill`：对话蒸馏、Git 变更提取与本地密钥脱敏引擎。
+- `packages/cli`（`loom-cli`）：可独立安装的 TypeScript CLI、huihua 会话收集和后台定时归档。
 - `packages/client`（`dsh-loom`）：DeepSeek Harness 本地插件与交互客户端 SDK。
 - `apps/web`：React 19 Web 前端管理看板。
 

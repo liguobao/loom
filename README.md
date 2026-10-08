@@ -148,6 +148,25 @@ Evaluate optional interactive collaboration mode in a future version.
 
 ## Install
 
+### CLI installation and scheduled archiving
+
+The standalone TypeScript CLI uses [Huihua](https://github.com/wibus-wee/huihua) to collect local sessions from Codex, Claude, Cursor, DeepSeek Harness and other Coding Agents. Requires Node.js **22.18+**.
+
+Download `loom-cli-<version>.tgz` from a GitHub Release, then:
+
+```sh
+npm install -g ./loom-cli-0.1.0.tgz
+cd /path/to/project
+loom init --providers codex,claude,deepseek --interval 300
+loom archive                 # Archive once immediately
+loom schedule install        # Start background archiving (macOS / Linux)
+loom schedule status
+```
+
+Use `loom watch` for foreground operation and `loom schedule uninstall` to remove the service. Scans run every 300 seconds by default and select sessions belonging to this workspace or its subdirectories. Redacted Markdown records live in `~/.loom/records/<project>-<workspace-hash>/`. Changed sessions update their existing record; unchanged sessions are skipped. Original conversations stay local, with no server upload.
+
+See the [CLI guide](packages/cli/README.md) for source installation, custom roots, configuration and Windows scheduling. CI and Releases package the CLI tarball; `npm install -g loom-cli` will also work once an npm registry release is published.
+
 ### Plugin installation
 
 Add the package through DSH's plugin manager for the `web` profile:
@@ -185,6 +204,7 @@ This repository houses the open-source client-side ecosystem:
 - `packages/crypto`: Noise IK cipher implementation and token utilities.
 - `packages/db`: SQLite schema, query routines, and FTS5 search indexer.
 - `packages/distill`: Conversation distillation, Git context extraction, and secret redaction.
+- `packages/cli` (`loom-cli`): Installable TypeScript CLI, Huihua session collection and scheduled local archiving.
 - `packages/client` (`dsh-loom`): DeepSeek Harness local plugin and client integration SDK.
 - `apps/web`: React 19 web application.
 
