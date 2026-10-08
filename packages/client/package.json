@@ -1,5 +1,5 @@
 {
-  "name": "dsh-loom",
+  "name": "@liguobao/dsh-loom",
   "version": "0.1.0",
   "description": "Loom plugin for DeepSeek Harness — Keep the work, not the chat.",
   "type": "module",
@@ -51,5 +51,19 @@
     "@deepseek-ai/cordis": {
       "optional": true
     }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liguobao/loom.git",
+    "directory": "packages/client"
+  },
+  "bugs": {
+    "url": "https://github.com/liguobao/loom/issues"
+  },
+  "homepage": "https://github.com/liguobao/loom#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }

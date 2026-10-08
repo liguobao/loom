@@ -114,7 +114,7 @@ jobs:
 
           GITHUB_PACKAGE_DIR="$RUNNER_TEMP/github-package"
           mkdir -p "$GITHUB_PACKAGE_DIR"
-          tar -xzf "release-assets/dsh-loom-$VERSION.tgz" -C "$GITHUB_PACKAGE_DIR"
+          tar -xzf "release-assets/liguobao-dsh-loom-$VERSION.tgz" -C "$GITHUB_PACKAGE_DIR"
 
           node --input-type=module <<'NODE'
           import { readFile, writeFile } from 'node:fs/promises'

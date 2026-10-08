@@ -2,7 +2,7 @@
 # inserted into the composed profile tree with its default config.
 - insert:
     - id: dsh-loom
-      name: dsh-loom
+      name: '@liguobao/dsh-loom'
       config:
         enabled: true
         autoArchiveOnDispose: true

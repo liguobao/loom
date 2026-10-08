@@ -152,27 +152,33 @@ Evaluate optional interactive collaboration mode in a future version.
 
 The standalone TypeScript CLI uses [Huihua](https://github.com/wibus-wee/huihua) to collect local sessions from Codex, Claude, Cursor, DeepSeek Harness and other Coding Agents. Requires Node.js **22.18+**.
 
-Download `loom-cli-<version>.tgz` from a GitHub Release, then:
+Install from npm:
 
 ```sh
-npm install -g ./loom-cli-0.1.0.tgz
+npm install -g @liguobao/loom-cli@0.1.0
 cd /path/to/project
 loom init --providers codex,claude,deepseek --interval 300
-loom archive                 # Archive once immediately
-loom schedule install        # Start background archiving (macOS / Linux)
+loom archive --summarizer codex-server     # Summarize with local Codex
+loom schedule install --summarizer codex-server  # Background summaries (macOS / Linux)
 loom schedule status
 ```
 
-Use `loom watch` for foreground operation and `loom schedule uninstall` to remove the service. Scans run every 300 seconds by default and select sessions belonging to this workspace or its subdirectories. Redacted Markdown records live in `~/.loom/records/<project>-<workspace-hash>/`. Changed sessions update their existing record; unchanged sessions are skipped. Original conversations stay local, with no server upload.
+Use `loom watch --summarizer codex-server` for foreground operation, or select local DSH with `--summarizer dsh` and `loom schedule uninstall` to remove the service. Scans run every 300 seconds by default and select sessions belonging to this workspace or its subdirectories. Redacted Markdown records live in `~/.loom/records/<project>-<workspace-hash>/`. Summaries cover requirements, corrections, key interactions, decisions, results and follow-ups from all turns. Changed sessions update their existing record; unchanged sessions are skipped. Original conversations stay local, with no server upload.
 
-See the [CLI guide](packages/cli/README.md) for source installation, custom roots, configuration and Windows scheduling. CI and Releases package the CLI tarball; `npm install -g loom-cli` will also work once an npm registry release is published.
+See the [CLI guide](packages/cli/README.md) for source installation, custom roots, configuration and Windows scheduling. The CLI is published as `@liguobao/loom-cli`; CI and GitHub Releases also package its tarball.
+
+### Browse local archives
+
+Run `loom serve` and open **http://127.0.0.1:8787** to browse workspaces and their
+Markdown records. Use `--output /path/to/archives` for a custom archive root or
+`--port 9000` for another port. Refresh to see new records; Ctrl+C stops the server.
 
 ### Plugin installation
 
 Add the package through DSH's plugin manager for the `web` profile:
 
 ```sh
-dsh plugin --profile web add -w dsh-loom
+dsh plugin --profile web add -w @liguobao/dsh-loom@0.1.0
 ```
 
 Restart Harness after installation.
@@ -204,8 +210,8 @@ This repository houses the open-source client-side ecosystem:
 - `packages/crypto`: Noise IK cipher implementation and token utilities.
 - `packages/db`: SQLite schema, query routines, and FTS5 search indexer.
 - `packages/distill`: Conversation distillation, Git context extraction, and secret redaction.
-- `packages/cli` (`loom-cli`): Installable TypeScript CLI, Huihua session collection and scheduled local archiving.
-- `packages/client` (`dsh-loom`): DeepSeek Harness local plugin and client integration SDK.
+- `packages/cli` (`@liguobao/loom-cli`): Installable TypeScript CLI, Huihua session collection and scheduled local archiving.
+- `packages/client` (`@liguobao/dsh-loom`): DeepSeek Harness local plugin and client integration SDK.
 - `apps/web`: React 19 web application.
 
 The **Loom Server is closed-source** and maintained in a separate repository. Client implementations interface with the server via the standardized [Protocol & API specification](docs/protocol.md).

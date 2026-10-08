@@ -1,13 +1,25 @@
 import { execFileSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sessions, type Session } from 'huihua'
-import { archiveWorkspace, inWorkspace, type Collector } from './archive.js'
+import { archiveWorkspace as collectWorkspace, inWorkspace, type Collector } from './archive.js'
+import type { SummaryModel } from './summary.js'
 import { validateConfig, workspaceId, type Config } from './config.js'
 import { serviceDefinition } from './schedule.js'
 
+// A deterministic model double isolates filesystem/Huihua tests from paid model calls.
+const testModel: SummaryModel = async (_system, input) => {
+  const messages = input.split('\n').map(line => JSON.parse(line))
+  const users = messages.filter(message => message.role === 'user')
+  const assistants = messages.filter(message => message.role === 'assistant')
+  return JSON.stringify({ title: 'Workspace archiving', goal: users[0]?.text || 'Workspace archive',
+    requirements: 'Summarize the initial requirement and later corrections. END OF LONG REQUEST',
+    interaction: 'The user refined the archive requirements after implementation.',
+    outcome: assistants.at(-1)?.text || 'Unverified', investigation: '', keyDecisions: '', rejectedApproaches: '', followUps: '' })
+}
+const archiveWorkspace = (config: Config, collector?: Collector, model: SummaryModel = testModel) => collectWorkspace(config, collector, model)
 const directories: string[] = []
 afterEach(async () => { await Promise.all(directories.splice(0).map(path => rm(path, { recursive: true, force: true }))) })
 async function setup() {
@@ -47,6 +59,47 @@ describe('workspace archiving through Huihua', () => {
     await rm(next.files[0])
     expect((await archiveWorkspace(config)).archived).toBe(1)
   })
+  it('upgrades legacy archives into summaries without copying the conversation', async () => {
+    const { config, source, fixture } = await setup()
+    const context = { type: 'event_msg', payload: { type: 'user_message', message: '<environment_context>cwd: /project</environment_context>' } }
+    const long = 'Keep every user requirement and every assistant response. '.repeat(60) + 'END OF LONG REQUEST'
+    const followup = { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: long }] } }
+    const short = { type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'OK' }] } }
+    const originalRows = fixture().trim().split('\n')
+    originalRows.splice(1, 0, JSON.stringify(context))
+    await writeFile(source, [...originalRows, JSON.stringify(followup), JSON.stringify(short)].join('\n') + '\n')
+    const first = await archiveWorkspace(config)
+    const markdown = await readFile(first.files[0], 'utf8')
+    expect(markdown).toContain('## Requirements')
+    expect(markdown).toContain('## Interaction Summary')
+    expect(markdown).not.toContain('## Conversation')
+    expect(markdown).not.toContain(long)
+    expect(markdown).toContain('END OF LONG REQUEST')
+    expect(markdown).not.toContain('### 1. User')
+    expect(markdown).not.toContain('sk-abcdefghijklmnopqrstuvwxyz')
+    expect(markdown.split('## Goal\n')[1].split('## Outcome')[0]).toContain('Implement local workspace archiving')
+    expect(markdown.split('## Goal\n')[1].split('## Outcome')[0]).not.toContain('environment_context')
+    const statePath = join(first.files[0], '..', '.state.json')
+    const state = JSON.parse(await readFile(statePath, 'utf8'))
+    for (const entry of Object.values(state.entries)) delete (entry as { formatVersion?: number }).formatVersion
+    await writeFile(statePath, JSON.stringify(state))
+    await writeFile(first.files[0], '# Legacy summary-only record\n')
+    const upgrade = await archiveWorkspace(config)
+    expect(upgrade.archived).toBe(1)
+    expect(upgrade.files).toEqual(first.files)
+    expect(await readFile(first.files[0], 'utf8')).toContain('## Requirements')
+    expect((await archiveWorkspace(config)).unchanged).toBe(1)
+  })
+  it('preserves the previous summary when a model call fails', async () => {
+    const { config, source, fixture } = await setup()
+    const first = await archiveWorkspace(config)
+    const previous = await readFile(first.files[0], 'utf8')
+    await writeFile(source, fixture(config.workspace, 'New assistant response requiring a summary refresh.'))
+    const failed = await archiveWorkspace(config, undefined, async () => { throw new Error('Summary model unavailable') })
+    expect(failed.failures[0]).toContain('Summary model unavailable')
+    expect(await readFile(first.files[0], 'utf8')).toBe(previous)
+    expect((await archiveWorkspace(config)).archived).toBe(1)
+  })
   it('excludes sibling workspaces and unknown workspace metadata', async () => {
     const { config, source, fixture } = await setup()
     await writeFile(source, fixture(config.workspace + '-other'))
@@ -67,6 +120,35 @@ describe('workspace archiving through Huihua', () => {
     const partial = await archiveWorkspace(config, collector)
     expect(partial.archived).toBe(0)
     expect(partial.failures).toHaveLength(1)
+    expect((await archiveWorkspace(config)).archived).toBe(1)
+  })
+  it('archives real Codex text despite status records, freeform tool arguments and pending results', async () => {
+    const { config, source } = await setup()
+    const extra = [
+      ...['task_started', 'world_state', 'item_completed', 'thread_settings_applied', 'mcp_tool_call_end', 'patch_apply_end'].map(type => ({ type: 'event_msg', payload: { type } })),
+      { type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'pending-call', name: 'apply_patch', input: '*** Begin Patch\n*** End Patch' } },
+    ]
+    await appendFile(source, extra.map(row => JSON.stringify(row)).join('\n') + '\n')
+    const session = await sessions.parse('codex', { path: source })
+    expect(session.diagnostics).toHaveLength(8)
+    const result = await archiveWorkspace(config)
+    expect(result.failures).toEqual([])
+    expect(result.warnings).toHaveLength(1)
+    expect(result.archived).toBe(1)
+    expect(await readFile(result.files[0], 'utf8')).toContain('Implement local workspace archiving')
+    expect((await archiveWorkspace(config)).unchanged).toBe(1)
+  })
+  it('preserves a good archive on malformed JSON and retries after repair', async () => {
+    const { config, source, fixture } = await setup()
+    const original = await archiveWorkspace(config)
+    const markdown = await readFile(original.files[0], 'utf8')
+    await appendFile(source, '{broken-json\n')
+    const broken = await archiveWorkspace(config)
+    expect(broken.archived).toBe(0)
+    expect(broken.failures).toHaveLength(1)
+    expect(broken.failures[0]).not.toContain('parse diagnostics;')
+    expect(await readFile(original.files[0], 'utf8')).toBe(markdown)
+    await writeFile(source, fixture(config.workspace, 'We decided to archive the repaired complete conversation now.'))
     expect((await archiveWorkspace(config)).archived).toBe(1)
   })
   it('serializes concurrent jobs and releases locks on failure', async () => {

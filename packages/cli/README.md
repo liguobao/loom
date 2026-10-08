@@ -8,21 +8,21 @@ Requires Node.js **22.18 or newer**.
 
 ```sh
 corepack pnpm install --frozen-lockfile
-corepack pnpm --filter loom-cli... build
+corepack pnpm --filter @liguobao/loom-cli... build
 mkdir -p artifacts
 corepack pnpm --dir packages/cli pack --pack-destination ../../artifacts
-npm install -g ./artifacts/loom-cli-0.1.0.tgz
+npm install -g ./artifacts/liguobao-loom-cli-0.1.0.tgz
 loom --help
 ```
 
-You can also install the `loom-cli-<version>.tgz` asset from a GitHub Release:
+You can also install the `liguobao-loom-cli-<version>.tgz` asset from a GitHub Release:
 
 ```sh
-npm install -g ./loom-cli-0.1.0.tgz
+npm install -g ./liguobao-loom-cli-0.1.0.tgz
 ```
 
 The package bundles Loom's summarization code; installation does not need the monorepo.
-An npm registry release can be installed with `npm install -g loom-cli` once published.
+An npm registry release can be installed with `npm install -g @liguobao/loom-cli` once published.
 This repository currently ships the tarball through CI and GitHub Releases.
 
 ## Archive a workspace
@@ -30,8 +30,8 @@ This repository currently ships the tarball through CI and GitHub Releases.
 ```sh
 cd /path/to/project
 loom init --providers codex,claude,deepseek --interval 300
-loom archive
-loom watch
+loom archive --summarizer codex-server
+loom watch --summarizer codex-server
 ```
 
 `init` writes a per-workspace config under `~/.loom/workspaces/<workspace-hash>/config.json`.
@@ -46,15 +46,39 @@ logs failures and retries on the next scan. Ctrl+C / SIGTERM stops after the cur
 
 ```sh
 loom init --workspace /path/to/project --output /path/to/archives --interval 600
-loom archive --workspace /path/to/project
+loom archive --workspace /path/to/project --summarizer codex-server
 ```
+
+## Browse archives in a local browser
+
+```sh
+loom serve
+# Open http://127.0.0.1:8787
+```
+
+The read-only server lists workspaces and their Markdown records, with a simple
+Markdown preview and expandable original source. It reads `~/.loom/records` (or
+`LOOM_STORAGE_DIR`) and custom output directories from workspace configs under
+`LOOM_HOME`. Registered workspaces appear even before their first archive.
+Refresh the page to see newly archived documents.
+
+```sh
+loom serve --port 9000
+loom serve --output /path/to/archives
+loom serve --config /path/to/config.json
+```
+
+`--output` browses the specified archive root; `--config` uses the output directory
+from that config. No `loom init` is required to browse an existing archive root.
+The server listens on `127.0.0.1` only. Ctrl+C stops it. It does not collect sessions
+or call a summary model; run `loom watch` separately for automatic archiving.
 
 ## Background automatic archiving
 
 After creating the config:
 
 ```sh
-loom schedule install
+loom schedule install --summarizer codex-server
 loom schedule status
 loom schedule uninstall
 ```
@@ -97,30 +121,80 @@ honors its documented provider environment variables.
 `LOOM_HOME` changes the config/log base directory. `LOOM_STORAGE_DIR` overrides the default
 archive output during `init`; output is saved in config for subsequent runs.
 
+## Local summarization backend
+
+Choose the local agent when starting the CLI:
+
+```sh
+loom archive --summarizer codex-server
+loom watch --summarizer dsh
+loom watch --summarizer dsh --summary-profile loom-summary
+loom schedule install --summarizer codex-server
+```
+
+- **codex-server:** starts the installed `codex app-server --stdio`, initializes the JSON-RPC
+  connection, opens an ephemeral read-only thread, and reads the final summary from completed
+  turn notifications. It reuses your local Codex configuration and authentication.
+- **dsh:** runs the installed `dsh --profile headless --json`, sends the summary task via stdin,
+  and accepts the final answer only when the process exits successfully. Use
+  `--summary-profile` to select your own headless profile.
+
+`--summary-command /absolute/path` selects the executable when it is not on PATH.
+Loom uses local subprocesses; it has no cloud API, API key or hosted model configuration.
+The selected agent's own model/provider configuration remains under your control.
+
+The backend can also be saved with `loom init --summarizer codex-server` or in JSON:
+
+```json
+"summary": {
+  "provider": "codex-server",
+  "command": "/absolute/path/to/codex",
+  "maxInputChars": 24000,
+  "timeoutSeconds": 180
+}
+```
+
+For DSH, use `"provider": "dsh"` and optionally `"profile": "loom-summary"`.
+`summary.args` accepts additional arguments as a JSON array, with no shell interpolation.
+Backend flags override the saved setting for that run. `schedule install` saves the selected
+backend and its resolved executable path so the background service uses the same selection.
+Generated summary sessions run under `~/.loom/summary-runtime`, outside the workspace being
+archived, to prevent the collector from repeatedly summarizing its own sessions.
+
 ## Archive behavior
 
 Records live at `<outputDir>/<project-name>-<workspace-hash>/<session-source-hash>.md`.
-Each record includes Loom's Goal, Outcome, Investigation, Key Decisions, Changed Areas and
-Follow-ups sections with YAML metadata. This uses Loom's existing **rule-based** summarizer,
-not an LLM. Text messages and normalized file changes feed the summary; reasoning, attachments,
-native raw records and tool output are not copied. Secret redaction uses Loom's existing
-pattern rules and cannot detect every possible secret.
+The local agent synthesizes **all collected user and assistant text** into Goal, Requirements,
+Interaction Summary, Outcome, Investigation, Key Decisions, Rejected Approaches and Follow-ups.
+Requirements covers initial requests, later additions, constraints and corrections. Interaction
+Summary explains how the conversation changed the solution. Later corrections take precedence
+over rejected earlier approaches. Status claims must distinguish requested, reported and verified work.
 
-- Same session source → same file; changes update the snapshot atomically.
-- Unchanged content → skipped, even across restarts. Missing archive files are recreated.
+This is a semantic summary, not a full transcript or a fixed-length excerpt. Long histories are
+processed in bounded chunks and their summaries are merged; input messages are not silently
+cut off. Invalid model output, insufficient compression, failed processes or timeouts preserve
+the existing archive and do not checkpoint the source as successful.
+
+Client environment context is excluded from the goal and summary input. Text is redacted before
+being sent to the local agent, and generated Markdown is redacted again before writing. Reasoning,
+attachments, raw records and tool output are not copied. Pattern redaction cannot identify every
+secret. Missing or compacted source history cannot be reconstructed.
+
+- Same session source → same file; changes update the summary atomically.
+- Old summary excerpts or transcript archives regenerate on the next successful scan.
+- Unchanged sources and summary settings skip model calls across restarts. Missing output is recreated.
 - Source identity includes provider, native ID and source locator to distinguish stores.
-- A private `.state.json` stores hashes and record metadata, never raw conversations.
-- A per-workspace lock prevents overlapping manual and background jobs. Dead PID locks recover
-  after a crash; parse diagnostics leave existing records untouched and retry on later scans.
-- Original session stores are read only. No upload, network API or agent invocation occurs during collection.
-- Running sessions are snapshots, not declared completed tasks. Git metadata comes from the session,
-  rather than the current checkout of a possibly unrelated branch.
+- A private `.state.json` stores hashes and metadata, never raw conversations.
+- A per-workspace lock prevents concurrent jobs. Dead PID locks recover after a crash.
+- Known Codex diagnostics for status records, tool parameters and pending tool results are
+  warnings. Other parse diagnostics preserve the existing archive and retry later.
+- Running sessions are snapshots, not automatically declared completed tasks.
 
 ## Development
 
 ```sh
-pnpm --filter loom-cli... build
-pnpm --filter loom-cli typecheck
-pnpm --filter loom-cli test
+pnpm --filter @liguobao/loom-cli... build
+pnpm --filter @liguobao/loom-cli typecheck
+pnpm --filter @liguobao/loom-cli test
 pnpm cli --help
 ```

@@ -1,22 +1,34 @@
 import { open, mkdir, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { sessions, type Session, type SessionRef } from 'huihua'
+import { sessions, type Diagnostic, type Session, type SessionRef } from 'huihua'
 import { conversationOf, fileChangesOf, millisOf } from 'huihua/observe'
-import { distillConversation, generateMarkdown, redactSecrets, type ConversationMessage } from '@loom/distill'
+import { generateMarkdown, redactSecrets, type ConversationMessage } from '@loom/distill'
+import { summarizeConversation, type SummaryModel } from './summary.js'
+import { createSummaryModel } from './model.js'
 import { atomicWrite, digest, workspaceId, type Config } from './config.js'
 
-interface Entry { fingerprint: string; file: string; createdAt: string }
+const ARCHIVE_FORMAT_VERSION = 3
+interface Entry { fingerprint: string; file: string; createdAt: string; formatVersion?: number }
 interface State { version: 1; entries: Record<string, Entry> }
-export interface ArchiveReport { archived: number; unchanged: number; skipped: number; failures: string[]; files: string[] }
+export interface ArchiveReport { archived: number; unchanged: number; skipped: number; failures: string[]; warnings: string[]; files: string[] }
 export interface Collector {
   scan: typeof sessions.scan
   read: typeof sessions.read
+}
+// These Codex diagnostics concern data the Markdown summarizer does not consume.
+// Keep unknown diagnostic kinds blocking: malformed message data must not replace a good archive.
+export function isNonConversationDiagnostic(provider: string, diagnostic: Diagnostic): boolean {
+  if (provider !== 'codex' || diagnostic.code !== 'PartialParse') return false
+  return /^unrecognized native record (task_started|world_state|item_completed|thread_settings_applied|mcp_tool_call_end|patch_apply_end)$/.test(diagnostic.message)
+    || diagnostic.message === 'tool arguments are not valid JSON'
+    || /^tool call \S+ has no recorded result$/.test(diagnostic.message)
 }
 function sourceKey(ref: SessionRef): string {
   return digest(JSON.stringify([ref.provider, ref.id, ref.source]))
 }
 export function messagesOf(session: Session): ConversationMessage[] {
   return conversationOf(session).map(event => ({
+    timestamp: timestamp(event.timestamp),
     role: event.type === 'user_message' ? 'user' as const : 'assistant' as const,
     content: event.data.content.filter(block => block.type === 'text').map(block => block.data).join('\n'),
   })).filter(message => message.content.trim().length > 0)
@@ -65,12 +77,14 @@ async function acquireLock(path: string): Promise<() => Promise<void>> {
   }
   throw new Error('Could not acquire archive lock')
 }
-export async function archiveWorkspace(config: Config, collector: Collector = sessions): Promise<ArchiveReport> {
+export async function archiveWorkspace(config: Config, collector: Collector = sessions, summaryModel?: SummaryModel): Promise<ArchiveReport> {
   const directory = join(config.outputDir, `${basename(config.workspace) || 'workspace'}-${workspaceId(config.workspace)}`)
   await mkdir(directory, { recursive: true, mode: 0o700 })
   const unlock = await acquireLock(join(directory, '.lock'))
-  const report: ArchiveReport = { archived: 0, unchanged: 0, skipped: 0, failures: [], files: [] }
+  const report: ArchiveReport = { archived: 0, unchanged: 0, skipped: 0, failures: [], warnings: [], files: [] }
   try {
+    const model = summaryModel ?? createSummaryModel(config.summary)
+    const summarySettings = digest(JSON.stringify(config.summary || 'injected-model'))
     const statePath = join(directory, '.state.json')
     const state = await loadState(statePath)
     const { refs, failures } = await collector.scan({ providers: config.providers, roots: config.roots, homeDir: config.homeDir })
@@ -81,36 +95,45 @@ export async function archiveWorkspace(config: Config, collector: Collector = se
         if (ref.workspace?.path && !await inWorkspace(ref.workspace.path, config.workspace)) { report.skipped++; continue }
         const session = await collector.read(ref)
         if (!await inWorkspace(session.workspace?.path ?? ref.workspace?.path, config.workspace)) { report.skipped++; continue }
-        if (session.diagnostics.length > 0) {
-          report.failures.push(`${ref.provider}/${ref.id}: parse diagnostics; retrying on the next run`)
+        const blocking = session.diagnostics.filter(diagnostic => !isNonConversationDiagnostic(session.provider, diagnostic))
+        if (blocking.length > 0) {
+          const details = redactSecrets(blocking.slice(0, 3).map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join('; ')).content
+          report.failures.push(`${ref.provider}/${ref.id}: ${details}; existing archive preserved, retrying on the next run`)
           continue
+        }
+        if (session.diagnostics.length > 0) {
+          report.warnings.push(`${ref.provider}/${ref.id}: ${session.diagnostics.length} non-conversation parse diagnostics; summarizing available text messages`)
         }
         const conversations = messagesOf(session)
         if (!conversations.length) { report.skipped++; continue }
         const key = sourceKey(ref)
         const changedFiles = fileChangesOf(session).map(event => event.data.path)
-        const fingerprint = digest(JSON.stringify([conversations, changedFiles, session.title, session.workspace, session.createdAt, session.updatedAt]))
+        const fingerprint = digest(JSON.stringify([summarySettings, conversations, changedFiles, session.title, session.workspace, session.createdAt, session.updatedAt]))
         const previous = state.entries[key]
         const file = `${key}.md`
-        if (previous?.fingerprint === fingerprint) {
+        if (previous?.fingerprint === fingerprint && previous.formatVersion === ARCHIVE_FORMAT_VERSION) {
           try { await stat(join(directory, file)); report.unchanged++; continue }
           catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
         }
         const createdAt = timestamp(session.createdAt) ?? previous?.createdAt ?? new Date().toISOString()
-        const { workRecord } = distillConversation({
-          conversations,
-          title: session.title,
+        const summary = await summarizeConversation(conversations, model, config.summary?.maxInputChars)
+        const markdown = redactSecrets(generateMarkdown({
+          title: summary.title,
+          goal: summary.goal,
+          outcome: summary.outcome,
+          investigation: summary.investigation,
+          keyDecisions: summary.keyDecisions,
+          rejectedApproaches: summary.rejectedApproaches,
+          followUps: summary.followUps,
+          changedAreas: [...new Set(changedFiles)],
           meta: {
             id: key, workspace: config.workspace, project: basename(config.workspace),
             createdAt, tags: [session.provider], sourceConversationCount: 1,
             repository: session.workspace?.repository, branch: session.workspace?.branch,
           },
-          gitContext: { changedFiles: [...new Set(changedFiles)] },
-        })
-        // Do not mark snapshots as completed or attribute today's Git changes to older sessions.
-        const markdown = redactSecrets(generateMarkdown(workRecord)).content
+        }) + '\n## Requirements\n\n' + summary.requirements + '\n\n## Interaction Summary\n\n' + summary.interaction + '\n').content
         await atomicWrite(join(directory, file), markdown)
-        state.entries[key] = { fingerprint, file, createdAt }
+        state.entries[key] = { fingerprint, file, createdAt, formatVersion: ARCHIVE_FORMAT_VERSION }
         // Persist each success so another failing source cannot lose progress.
         await atomicWrite(statePath, JSON.stringify(state, null, 2) + '\n')
         report.archived++

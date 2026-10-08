@@ -7,6 +7,8 @@ import { sessions } from 'huihua'
 import { archiveWorkspace } from './archive.js'
 import { atomicWrite, canonicalWorkspace, defaultConfigPath, loadConfig, loomHome, validateConfig, type Config } from './config.js'
 import { schedule } from './schedule.js'
+import { startArchiveServer } from './server.js'
+import { createSummaryModel, resolveSummaryCommand } from './model.js'
 
 declare const LOOM_CLI_VERSION: string
 
@@ -18,10 +20,15 @@ Usage:
   loom watch [--workspace path | --config file]
   loom schedule install|uninstall|status [--workspace path | --config file]
   loom providers
+  loom serve [--port 8787] [--output path | --config file]
 
 Options:
+  --port number        Local browser server port (default: 8787)
   --output path        Archive directory (default: ~/.loom/records)
   --interval seconds   Time between scans (default: 300, range: 1..86400)
+  --summarizer backend Local summary backend: codex-server or dsh
+  --summary-command p  Executable path (default: codex or dsh)
+  --summary-profile p  DSH headless profile (default: headless)
   --config file        JSON configuration; init writes to this path
   --force              Replace an existing config with init
   --help, -h           Show help
@@ -35,18 +42,38 @@ async function main(): Promise<void> {
     allowPositionals: true,
     options: {
       workspace: { type: 'string' }, output: { type: 'string' }, providers: { type: 'string' },
-      interval: { type: 'string' }, config: { type: 'string' }, force: { type: 'boolean' },
+      summarizer: { type: 'string' }, 'summary-command': { type: 'string' }, 'summary-profile': { type: 'string' },
+      port: { type: 'string' }, interval: { type: 'string' }, config: { type: 'string' }, force: { type: 'boolean' },
       help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' },
     },
   })
   if (values.version) { console.log(LOOM_CLI_VERSION); return }
   if (values.help || !positionals.length) { console.log(help); return }
   const [command, action] = positionals
-  if (!['init', 'archive', 'watch', 'schedule', 'providers'].includes(command)) throw new Error(`Unknown command: ${command}`)
+  if (!['init', 'archive', 'watch', 'schedule', 'providers', 'serve'].includes(command)) throw new Error(`Unknown command: ${command}`)
   if (positionals.length > (command === 'schedule' ? 2 : 1)) throw new Error('Unexpected positional arguments')
   if (command === 'providers') { console.log(sessions.providers().map(p => p.id).join('\n')); return }
+  if (command === 'serve') {
+    const server = await startArchiveServer({ port: values.port === undefined ? undefined : Number(values.port),
+      outputDir: values.output ? resolve(values.output) : undefined, configPath: values.config ? resolve(values.config) : undefined })
+    const address = server.address()
+    console.log(`Loom archive browser: http://127.0.0.1:${typeof address === 'object' && address ? address.port : values.port || 8787}`)
+    console.log('Press Ctrl+C to stop. Refresh the page to see new archives.')
+    const stop = () => { server.close(); server.closeAllConnections(); process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop) }
+    process.once('SIGINT', stop); process.once('SIGTERM', stop)
+    return
+  }
   const workspace = await canonicalWorkspace(values.workspace || process.cwd())
   const configPath = resolve(values.config || defaultConfigPath(workspace))
+  const summaryOverride = (existing: Config['summary']): Config['summary'] => {
+    if (!values.summarizer && !values['summary-command'] && !values['summary-profile']) return existing
+    const provider = values.summarizer || existing?.provider
+    if (provider !== 'codex-server' && provider !== 'dsh') throw new Error('--summarizer must be codex-server or dsh')
+    return { ...(provider === existing?.provider ? existing : {}), provider,
+      ...(values['summary-command'] ? { command: values['summary-command'] } : {}),
+      ...(values['summary-profile'] ? { profile: values['summary-profile'] } : {}),
+    }
+  }
   let config: Config
   if (command === 'init') {
     if (!values.force) {
@@ -55,9 +82,9 @@ async function main(): Promise<void> {
     }
     config = validateConfig({ version: 1, workspace, outputDir: resolve(values.output || process.env.LOOM_STORAGE_DIR || join(loomHome(), 'records')),
       providers: values.providers ? values.providers.split(',').map(p => p.trim()) : sessions.providers().map(p => p.id),
-      intervalSeconds: Number(values.interval || 300) })
+      intervalSeconds: Number(values.interval || 300), summary: summaryOverride(undefined) })
     await atomicWrite(configPath, JSON.stringify(config, null, 2) + '\n')
-    console.log(`Created ${configPath}\nRun loom archive, loom watch, or loom schedule install.`)
+    console.log(`Created ${configPath}\nRun loom archive --summarizer codex-server, or use --summarizer dsh.`)
     return
   }
   try { config = await loadConfig(configPath) }
@@ -70,16 +97,24 @@ async function main(): Promise<void> {
     outputDir: values.output ? resolve(values.output) : config.outputDir,
     providers: values.providers ? values.providers.split(',').map(p => p.trim()) : config.providers,
     intervalSeconds: values.interval ? Number(values.interval) : config.intervalSeconds,
+    summary: summaryOverride(config.summary),
   })
   if (command === 'schedule') {
     if (values.output || values.providers || values.interval || (values.workspace && config.workspace !== (await loadConfig(configPath)).workspace))
       throw new Error('Save service options in the config with loom init --force before installing a schedule')
+    if (action === 'install') {
+      createSummaryModel(config.summary)
+      config.summary = await resolveSummaryCommand(config.summary!)
+      await atomicWrite(configPath, JSON.stringify(config, null, 2) + '\n')
+    }
     console.log(await schedule(action || '', config, configPath)); return
   }
+  const model = createSummaryModel(config.summary)
   const run = async () => {
-    const report = await archiveWorkspace(config)
-    console.log(`${new Date().toISOString()} archived=${report.archived} unchanged=${report.unchanged} skipped=${report.skipped} failures=${report.failures.length}`)
+    const report = await archiveWorkspace(config, undefined, model)
+    console.log(`${new Date().toISOString()} archived=${report.archived} unchanged=${report.unchanged} skipped=${report.skipped} failures=${report.failures.length} warnings=${report.warnings.length}`)
     for (const file of report.files) console.log(file)
+    for (const warning of report.warnings) console.error(`Warning: ${warning}`)
     for (const failure of report.failures) console.error(failure)
     return report
   }

@@ -1,12 +1,19 @@
 {
-  "name": "loom-cli",
+  "name": "@liguobao/loom-cli",
   "version": "0.1.0",
   "description": "Archive local coding agent sessions by workspace, powered by Huihua",
   "type": "module",
   "license": "MIT",
-  "bin": { "loom": "./dist/cli.js" },
-  "files": ["dist", "README.md"],
-  "engines": { "node": ">=22.18.0" },
+  "bin": {
+    "loom": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -14,6 +21,24 @@
     "test": "vitest run",
     "prepack": "pnpm run build"
   },
-  "dependencies": { "huihua": "0.4.1", "gray-matter": "^4.0.3" },
-  "devDependencies": { "@loom/distill": "workspace:*" }
+  "dependencies": {
+    "huihua": "0.4.1",
+    "gray-matter": "^4.0.3"
+  },
+  "devDependencies": {
+    "@loom/distill": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liguobao/loom.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/liguobao/loom/issues"
+  },
+  "homepage": "https://github.com/liguobao/loom#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
 }

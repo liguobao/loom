@@ -3,6 +3,7 @@ import { mkdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/prom
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { sessions } from 'huihua'
+import { validateSummaryConfig, type SummaryConfig } from './model.js'
 
 export interface Config {
   version: 1
@@ -12,6 +13,7 @@ export interface Config {
   intervalSeconds: number
   roots?: Record<string, string[]>
   homeDir?: string
+  summary?: SummaryConfig
 }
 export const digest = (value: string) => createHash('sha256').update(value).digest('hex')
 export const loomHome = () => resolve(process.env.LOOM_HOME || join(homedir(), '.loom'))
@@ -45,6 +47,7 @@ export function validateConfig(value: unknown): Config {
       if (!Array.isArray(paths) || paths.some(p => typeof p !== 'string')) throw new Error(`Invalid roots for ${provider}`)
     }
   }
+  if (config.summary !== undefined) validateSummaryConfig(config.summary)
   return config
 }
 export async function loadConfig(path: string): Promise<Config> {
