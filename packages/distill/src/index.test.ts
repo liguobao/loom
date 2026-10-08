@@ -110,6 +110,8 @@ describe('generateMarkdown + parseMarkdown', () => {
       meta,
       title: '测试标题',
       goal: '测试目标',
+      requirements: '保留新增需求与约束',
+      interaction: '初次尝试失败，用户纠正后修复并通过测试',
       outcome: '测试结果',
     })
 
@@ -118,6 +120,8 @@ describe('generateMarkdown + parseMarkdown', () => {
     expect(parsed.meta.organization).toBe('org_1')
     expect(parsed.meta.tags).toEqual(['remote', 'websocket', 'permissions'])
     expect(parsed.goal).toBe('测试目标')
+    expect(parsed.requirements).toBe('保留新增需求与约束')
+    expect(parsed.interaction).toBe('初次尝试失败，用户纠正后修复并通过测试')
     expect(parsed.outcome).toBe('测试结果')
   })
 })

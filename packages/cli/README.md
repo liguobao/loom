@@ -164,11 +164,14 @@ archived, to prevent the collector from repeatedly summarizing its own sessions.
 ## Archive behavior
 
 Records live at `<outputDir>/<project-name>-<workspace-hash>/<session-source-hash>.md`.
-The local agent synthesizes **all collected user and assistant text** into Goal, Requirements,
+The local agent synthesizes **all collected user and assistant text and execution evidence** into Goal, Requirements,
 Interaction Summary, Outcome, Investigation, Key Decisions, Rejected Approaches and Follow-ups.
 Requirements covers initial requests, later additions, constraints and corrections. Interaction
-Summary explains how the conversation changed the solution. Later corrections take precedence
-over rejected earlier approaches. Status claims must distinguish requested, reported and verified work.
+Summary describes key phases in source order: request, attempts, feedback and corrections,
+failures, fixes and final state. Later corrections take precedence over rejected earlier
+approaches. Tool calls, results, commands, exit codes, file changes and errors supply evidence;
+calls without results do not prove success. Status claims must distinguish requested, reported
+and verified work, naming relevant commands/tests and marking missing verification.
 
 This is a semantic summary, not a full transcript or a fixed-length excerpt. Long histories are
 processed in bounded chunks and their summaries are merged; input messages are not silently
@@ -177,10 +180,11 @@ the existing archive and do not checkpoint the source as successful.
 
 Client environment context is excluded from the goal and summary input. Text is redacted before
 being sent to the local agent, and generated Markdown is redacted again before writing. Reasoning,
-attachments, raw records and tool output are not copied. Pattern redaction cannot identify every
+attachments and raw records are not included. Tool evidence enters the summary input but is
+distilled instead of being appended as a transcript. Pattern redaction cannot identify every
 secret. Missing or compacted source history cannot be reconstructed.
 
-- Same session source → same file; changes update the summary atomically.
+- Same session source → same file; changes, including tool-result-only updates, update the summary atomically.
 - Old summary excerpts or transcript archives regenerate on the next successful scan.
 - Unchanged sources and summary settings skip model calls across restarts. Missing output is recreated.
 - Source identity includes provider, native ID and source locator to distinguish stores.

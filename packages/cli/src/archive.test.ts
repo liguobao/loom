@@ -81,7 +81,7 @@ describe('workspace archiving through Huihua', () => {
     expect(markdown.split('## Goal\n')[1].split('## Outcome')[0]).not.toContain('environment_context')
     const statePath = join(first.files[0], '..', '.state.json')
     const state = JSON.parse(await readFile(statePath, 'utf8'))
-    for (const entry of Object.values(state.entries)) delete (entry as { formatVersion?: number }).formatVersion
+    for (const entry of Object.values(state.entries)) (entry as { formatVersion?: number }).formatVersion = 3
     await writeFile(statePath, JSON.stringify(state))
     await writeFile(first.files[0], '# Legacy summary-only record\n')
     const upgrade = await archiveWorkspace(config)
@@ -99,6 +99,29 @@ describe('workspace archiving through Huihua', () => {
     expect(failed.failures[0]).toContain('Summary model unavailable')
     expect(await readFile(first.files[0], 'utf8')).toBe(previous)
     expect((await archiveWorkspace(config)).archived).toBe(1)
+  })
+  it('summarizes real tool evidence in source order and refreshes when only results change', async () => {
+    const { config, source, fixture } = await setup()
+    const call = { type: 'response_item', payload: { type: 'function_call', call_id: 'test-1', name: 'exec_command', arguments: JSON.stringify({ cmd: 'pnpm test' }) } }
+    const output = (text: string) => ({ type: 'response_item', payload: { type: 'function_call_output', call_id: 'test-1', output: text } })
+    const rows = fixture().trim().split('\n')
+    let input = ''
+    const model: SummaryModel = async (system, value) => { input = value; return testModel(system, value) }
+    await writeFile(source, [...rows, JSON.stringify(call), JSON.stringify(output('FAIL auth.test.ts; exit code 1; sk-abcdefghijklmnopqrstuvwxyz123456'))].join('\n') + '\n')
+    const first = await archiveWorkspace(config, undefined, model)
+    expect(first.failures).toEqual([])
+    const events = input.split('\n').map(line => JSON.parse(line))
+    expect(events.map(event => event.role)).toEqual(['user', 'assistant', 'tool', 'tool'])
+    expect(input).toContain('pnpm test')
+    expect(input).toContain('FAIL auth.test.ts; exit code 1')
+    expect(input).not.toContain('sk-abcdefghijklmnopqrstuvwxyz')
+    expect(input).toContain('[REDACTED:API_KEY]')
+    expect((await archiveWorkspace(config, undefined, model)).unchanged).toBe(1)
+    await writeFile(source, [...rows, JSON.stringify(call), JSON.stringify(output('PASS auth.test.ts; exit code 0'))].join('\n') + '\n')
+    const next = await archiveWorkspace(config, undefined, model)
+    expect(next.archived).toBe(1)
+    expect(next.files).toEqual(first.files)
+    expect(input).toContain('PASS auth.test.ts; exit code 0')
   })
   it('excludes sibling workspaces and unknown workspace metadata', async () => {
     const { config, source, fixture } = await setup()

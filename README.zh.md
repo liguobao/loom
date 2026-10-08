@@ -162,7 +162,7 @@ loom schedule install --summarizer codex-server  # 后台定时总结（macOS / 
 loom schedule status
 ```
 
-前台运行可使用 `loom watch --summarizer codex-server`，或用 `--summarizer dsh` 选择本机 DSH；删除后台服务使用 `loom schedule uninstall`。默认每 300 秒扫描一次，仅归档当前工作区及其子目录的会话。记录保存在 `~/.loom/records/<项目名>-<工作区哈希>/`，同一会话更新同一份脱敏 Markdown 总结，覆盖全轮次需求、约束、关键交互、决策、结果和待办；未变化的会话自动跳过。原始会话仍留在本地，不上传服务器。
+前台运行可使用 `loom watch --summarizer codex-server`，或用 `--summarizer dsh` 选择本机 DSH；删除后台服务使用 `loom schedule uninstall`。默认每 300 秒扫描一次，仅归档当前工作区及其子目录的会话。记录保存在 `~/.loom/records/<项目名>-<工作区哈希>/`，同一会话更新同一份脱敏 Markdown 总结，覆盖全轮次需求、约束、按时间顺序的关键交互、失败与修复、决策、结果和待办，并结合工具调用、执行结果、报错及测试证据区分已验证与未验证的工作；未变化的会话自动跳过。原始会话仍留在本地，不上传服务器。
 
 源码安装、自定义会话路径、Windows 调度方式和配置说明见 [CLI 文档](packages/cli/README.md)。CLI 已发布为 `@liguobao/loom-cli`，CI 和 GitHub Release 也提供打包产物。
 

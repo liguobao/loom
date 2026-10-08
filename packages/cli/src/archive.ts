@@ -1,13 +1,13 @@
 import { open, mkdir, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { sessions, type Diagnostic, type Session, type SessionRef } from 'huihua'
-import { conversationOf, fileChangesOf, millisOf } from 'huihua/observe'
+import { fileChangesOf, millisOf } from 'huihua/observe'
 import { generateMarkdown, redactSecrets, type ConversationMessage } from '@loom/distill'
 import { summarizeConversation, type SummaryModel } from './summary.js'
 import { createSummaryModel } from './model.js'
 import { atomicWrite, digest, workspaceId, type Config } from './config.js'
 
-const ARCHIVE_FORMAT_VERSION = 3
+const ARCHIVE_FORMAT_VERSION = 4
 interface Entry { fingerprint: string; file: string; createdAt: string; formatVersion?: number }
 interface State { version: 1; entries: Record<string, Entry> }
 export interface ArchiveReport { archived: number; unchanged: number; skipped: number; failures: string[]; warnings: string[]; files: string[] }
@@ -15,8 +15,8 @@ export interface Collector {
   scan: typeof sessions.scan
   read: typeof sessions.read
 }
-// These Codex diagnostics concern data the Markdown summarizer does not consume.
-// Keep unknown diagnostic kinds blocking: malformed message data must not replace a good archive.
+// Known parser gaps remain warnings; missing tool results must be described as unverified.
+// Unknown diagnostic kinds remain blocking so malformed data cannot replace a good archive.
 export function isNonConversationDiagnostic(provider: string, diagnostic: Diagnostic): boolean {
   if (provider !== 'codex' || diagnostic.code !== 'PartialParse') return false
   return /^unrecognized native record (task_started|world_state|item_completed|thread_settings_applied|mcp_tool_call_end|patch_apply_end)$/.test(diagnostic.message)
@@ -27,11 +27,20 @@ function sourceKey(ref: SessionRef): string {
   return digest(JSON.stringify([ref.provider, ref.id, ref.source]))
 }
 export function messagesOf(session: Session): ConversationMessage[] {
-  return conversationOf(session).map(event => ({
-    timestamp: timestamp(event.timestamp),
-    role: event.type === 'user_message' ? 'user' as const : 'assistant' as const,
-    content: event.data.content.filter(block => block.type === 'text').map(block => block.data).join('\n'),
-  })).filter(message => message.content.trim().length > 0)
+  const messages: ConversationMessage[] = []
+  for (const event of session.events) {
+    const time = timestamp(event.timestamp)
+    if (event.type === 'user_message' || event.type === 'assistant_message') {
+      const content = event.data.content.filter(block => block.type === 'text').map(block => block.data).join('\n')
+      if (content.trim()) messages.push({ timestamp: time, role: event.type === 'user_message' ? 'user' : 'assistant', content })
+    } else if (['tool_call', 'tool_result', 'command', 'file_change', 'error'].includes(event.type)) {
+      messages.push({ timestamp: time, role: 'tool',
+        toolName: event.type === 'tool_call' || event.type === 'tool_result' ? event.data.toolName : event.type,
+        content: JSON.stringify({ type: event.type, sequence: event.sequence, ...event.data }),
+      })
+    }
+  }
+  return messages
 }
 export async function inWorkspace(path: string | undefined, workspace: string): Promise<boolean> {
   if (!path || !isAbsolute(path)) return false
@@ -105,7 +114,7 @@ export async function archiveWorkspace(config: Config, collector: Collector = se
           report.warnings.push(`${ref.provider}/${ref.id}: ${session.diagnostics.length} non-conversation parse diagnostics; summarizing available text messages`)
         }
         const conversations = messagesOf(session)
-        if (!conversations.length) { report.skipped++; continue }
+        if (!conversations.some(message => message.role !== 'tool')) { report.skipped++; continue }
         const key = sourceKey(ref)
         const changedFiles = fileChangesOf(session).map(event => event.data.path)
         const fingerprint = digest(JSON.stringify([summarySettings, conversations, changedFiles, session.title, session.workspace, session.createdAt, session.updatedAt]))
@@ -120,6 +129,8 @@ export async function archiveWorkspace(config: Config, collector: Collector = se
         const markdown = redactSecrets(generateMarkdown({
           title: summary.title,
           goal: summary.goal,
+          requirements: summary.requirements,
+          interaction: summary.interaction,
           outcome: summary.outcome,
           investigation: summary.investigation,
           keyDecisions: summary.keyDecisions,
@@ -131,7 +142,7 @@ export async function archiveWorkspace(config: Config, collector: Collector = se
             createdAt, tags: [session.provider], sourceConversationCount: 1,
             repository: session.workspace?.repository, branch: session.workspace?.branch,
           },
-        }) + '\n## Requirements\n\n' + summary.requirements + '\n\n## Interaction Summary\n\n' + summary.interaction + '\n').content
+        })).content
         await atomicWrite(join(directory, file), markdown)
         state.entries[key] = { fingerprint, file, createdAt, formatVersion: ARCHIVE_FORMAT_VERSION }
         // Persist each success so another failing source cannot lose progress.

@@ -7,3 +7,5 @@
       config:
         enabled: true
         autoArchiveOnDispose: true
+        summary:
+          provider: dsh

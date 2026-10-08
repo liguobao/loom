@@ -16,20 +16,34 @@ describe('semantic conversation summarization', () => {
       { role: 'user', content: 'Initial request sk-abcdefghijklmnopqrstuvwxyz123456' },
       { role: 'assistant', content: 'I will archive full conversations.' },
       { role: 'user', content: 'No, summarize.' },
-    ], async (system, value) => { expect(system).toContain('后续纠正优先'); input = value; return JSON.stringify(summary) })
+      { role: 'tool', toolName: 'exec_command', content: 'FAIL auth.test.ts; exit code 1; sk-abcdefghijklmnopqrstuvwxyz123456' },
+      { role: 'assistant', content: 'All tests passed.' },
+    ], async (system, value) => {
+      expect(system).toContain('后续纠正优先')
+      expect(system).toContain('工具调用只证明尝试执行')
+      expect(system).toContain('interaction 按发生顺序')
+      input = value
+      return JSON.stringify(summary)
+    })
     expect(input).toContain('No, summarize.')
     expect(input).toContain('[REDACTED:API_KEY]')
     expect(input).not.toContain('sk-abcdefghijklmnopqrstuvwxyz')
     expect(input).not.toContain('environment_context')
+    expect(input).toContain('FAIL auth.test.ts; exit code 1')
+    expect(input).toContain('exec_command')
+    expect(input).toContain('All tests passed.')
     expect(result).toEqual(summary)
   })
   it('processes the entire long history in bounded chunks and merges its summaries', async () => {
     const text = 'requirement '.repeat(600) + 'LAST USER CORRECTION'
     let collected = ''
     let merges = 0
-    await summarizeConversation([{ role: 'user', content: text }], async (system, input) => {
+    await summarizeConversation([{ role: 'tool', toolName: 'test', content: text }], async (system, input) => {
       expect(input.length).toBeLessThanOrEqual(2000)
-      if (system.includes('输入是按时间排序')) merges++
+      if (system.includes('输入是按时间排序')) {
+        expect(system).toContain('失败与修复及验证证据')
+        merges++
+      }
       else for (const line of input.split('\n')) collected += JSON.parse(line).text
       return JSON.stringify(summary)
     }, 2000)

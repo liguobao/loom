@@ -163,7 +163,7 @@ loom schedule install --summarizer codex-server  # Background summaries (macOS /
 loom schedule status
 ```
 
-Use `loom watch --summarizer codex-server` for foreground operation, or select local DSH with `--summarizer dsh` and `loom schedule uninstall` to remove the service. Scans run every 300 seconds by default and select sessions belonging to this workspace or its subdirectories. Redacted Markdown records live in `~/.loom/records/<project>-<workspace-hash>/`. Summaries cover requirements, corrections, key interactions, decisions, results and follow-ups from all turns. Changed sessions update their existing record; unchanged sessions are skipped. Original conversations stay local, with no server upload.
+Use `loom watch --summarizer codex-server` for foreground operation, or select local DSH with `--summarizer dsh` and `loom schedule uninstall` to remove the service. Scans run every 300 seconds by default and select sessions belonging to this workspace or its subdirectories. Redacted Markdown records live in `~/.loom/records/<project>-<workspace-hash>/`. Summaries cover requirements, corrections, chronological key interactions, failures and fixes, decisions, results and follow-ups from all turns. Tool calls, execution results, errors and test evidence distinguish verified work from unverified claims. Changed sessions update their existing record; unchanged sessions are skipped. Original conversations stay local, with no server upload.
 
 See the [CLI guide](packages/cli/README.md) for source installation, custom roots, configuration and Windows scheduling. The CLI is published as `@liguobao/loom-cli`; CI and GitHub Releases also package its tarball.
 

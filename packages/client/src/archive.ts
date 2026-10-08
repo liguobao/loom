@@ -6,9 +6,9 @@
 import { writeFile, mkdir } from 'node:fs/promises'
 import { join, dirname, basename, resolve } from 'node:path'
 import { homedir } from 'node:os'
-import { redactSecrets, generateMarkdown, distillConversation, getGitContext } from '@loom/distill'
+import { redactSecrets, generateMarkdown, summarizeConversation, createSummaryModel, extractChangedAreas, getGitContext } from '@loom/distill'
 import { ulid } from 'ulid'
-import type { WorkRecordMeta, ConversationMessage } from '@loom/distill'
+import type { WorkRecordMeta, ConversationMessage, SummaryConfig, SummaryModel } from '@loom/distill'
 
 export interface ArchiveOptions {
   conversations: ConversationMessage[]
@@ -17,6 +17,8 @@ export interface ArchiveOptions {
   project?: string
   cwd?: string
   outputDir?: string
+  summary?: SummaryConfig
+  summaryModel?: SummaryModel
   // 可选 Git 信息覆盖
   repository?: string
   branch?: string
@@ -87,7 +89,7 @@ export function getDefaultStorageDir(): string {
  * 执行本地对话总结与归档:
  * 1. 提取/推导 workspace 和 project
  * 2. 读取当前目录 Git context
- * 3. 使用 distillConversation 总结对话 (Goal, Outcome, Key Decisions, Changed Areas, Follow-ups)
+ * 3. 使用共享语义总结器归纳全轮次对话与工具证据
  * 4. 生成标准 Markdown (带 Front Matter)
  * 5. 执行敏感信息正则脱敏 (redactSecrets)
  * 6. 保存到用户文件夹下: <outputDir>/<workspace>/<project>/<timestamp-id>.md
@@ -112,33 +114,30 @@ export async function archiveWork(options: ArchiveOptions): Promise<ArchiveResul
     workspace,
     project,
     createdAt: nowIso,
-    completedAt: nowIso,
     repository: options.repository ?? gitContext.repository,
     branch: options.branch ?? gitContext.branch,
     baseCommit: options.baseCommit ?? gitContext.baseCommit,
     finalCommit: options.finalCommit ?? gitContext.finalCommit,
     tags: options.tags ?? [],
-    sourceConversationCount: options.sourceConversationCount ?? options.conversations.length,
+    sourceConversationCount: options.sourceConversationCount ?? 1,
   }
 
   // 3. 提炼并总结对话
-  const { workRecord } = distillConversation({
-    conversations: options.conversations,
+  const model = options.summaryModel ?? createSummaryModel(options.summary ?? { provider: 'dsh' })
+  const summary = await summarizeConversation(options.conversations, model, options.summary?.maxInputChars)
+  const workRecord = {
+    ...summary,
     meta,
-    title: options.title,
-    gitContext: {
-      repository: gitContext.repository,
-      branch: gitContext.branch,
-      changedFiles: gitContext.changedFiles,
-      commitMessages: gitContext.commitMessages,
-    },
-  })
+    title: options.title ?? summary.title,
+    changedAreas: [...new Set(extractChangedAreas(options.conversations))],
+  }
 
   // 4. 生成规范 Markdown
   const rawMarkdown = generateMarkdown(workRecord)
 
   // 5. 敏感信息脱敏
-  const { content: redactedMarkdown, redactedCount } = redactSecrets(rawMarkdown)
+  const { content: redactedMarkdown, redactedCount: outputRedactedCount } = redactSecrets(rawMarkdown)
+  const redactedCount = outputRedactedCount + options.conversations.reduce((count, message) => count + redactSecrets(message.content).redactedCount, 0)
 
   // 6. 确定存储路径: <workspace>/<project>/<timestamp-shortId>.md
   const timeStr = formatTimestamp(now)

@@ -45,7 +45,7 @@ rl.on('line', line => {
     const { path, trace } = await executable(`
 let input='';process.stdin.on('data', chunk => {input+=chunk});
 process.stdin.on('end', () => {
-  fs.writeFileSync(trace,JSON.stringify({args:process.argv.slice(2),input}));
+  fs.writeFileSync(trace,JSON.stringify({args:process.argv.slice(2),input,runtime:process.env.LOOM_SUMMARY_RUNTIME}));
   process.stdout.write(JSON.stringify({type:'text',text:'intermediate output'})+'\\n');
   process.stdout.write(JSON.stringify({type:'final',text:'semantic DSH summary'})+'\\n');
 });`)
@@ -54,6 +54,7 @@ process.stdin.on('end', () => {
     const captured = JSON.parse(await readFile(trace, 'utf8'))
     expect(captured.args).toEqual(['--profile', 'loom-summary', '--json'])
     expect(captured.input).toContain('User corrections')
+    expect(captured.runtime).toBe('1')
   })
   it.skipIf(process.platform === 'win32')('fails missing executables, nonzero exits and timeouts', async () => {
     await expect(createSummaryModel({ provider: 'dsh', command: '/nonexistent/loom-agent' })('S', 'I')).rejects.toThrow('Cannot start')

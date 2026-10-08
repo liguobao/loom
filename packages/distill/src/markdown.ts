@@ -25,6 +25,8 @@ export interface WorkRecordContent {
   meta: WorkRecordMeta
   /** Markdown 正文各节 */
   goal: string
+  requirements: string
+  interaction: string
   outcome: string
   investigation: string
   keyDecisions: string
@@ -39,6 +41,8 @@ export interface WorkRecordInput {
   meta: WorkRecordMeta
   title: string
   goal: string
+  requirements?: string
+  interaction?: string
   outcome: string
   investigation?: string
   keyDecisions?: string
@@ -58,7 +62,7 @@ export interface WorkRecordInput {
  * 正文各节按固定顺序排列，空节仍输出标题（保持格式统一）。
  */
 export function generateMarkdown(input: WorkRecordInput): string {
-  const { meta, title, goal, outcome, investigation, keyDecisions, rejectedApproaches, changedAreas, followUps } =
+  const { meta, title, goal, requirements, interaction, outcome, investigation, keyDecisions, rejectedApproaches, changedAreas, followUps } =
     input
 
   // 构造 Front Matter 对象（gray-matter 会负责序列化）
@@ -99,6 +103,14 @@ export function generateMarkdown(input: WorkRecordInput): string {
     '## Goal',
     '',
     goal || '',
+    '',
+    '## Requirements',
+    '',
+    requirements || '',
+    '',
+    '## Interaction Summary',
+    '',
+    interaction || '',
     '',
     '## Outcome',
     '',
@@ -163,6 +175,8 @@ export function parseMarkdown(content: string): WorkRecordContent {
   return {
     meta,
     goal: extractSection(rawBody, 'Goal'),
+    requirements: extractSection(rawBody, 'Requirements'),
+    interaction: extractSection(rawBody, 'Interaction Summary'),
     outcome: extractSection(rawBody, 'Outcome'),
     investigation: extractSection(rawBody, 'Investigation'),
     keyDecisions: extractSection(rawBody, 'Key Decisions'),

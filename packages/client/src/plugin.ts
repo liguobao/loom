@@ -3,14 +3,14 @@
  * 本地对话总结与工作记录归档插件
  * 
  * 核心特性:
- * 1. 纯本地运行，不依赖 Server 端，不外发数据
+ * 1. 本地归档，不依赖 Loom Server；总结使用本机 Agent 的模型配置
  * 2. 自动/手动提取 DeepSeek 对话并提炼总结 (Goal, Outcome, Decisions, Changes, Follow-ups)
  * 3. 自动正则脱敏敏感信息 (API Key, Token, Password 等)
  * 4. 存储到用户文件夹下，按 <workspace>/<project>/<timestamp-id>.md 规范组织
  */
 import { archiveWork, type ArchiveOptions, type ArchiveResult, getDefaultStorageDir, resolveWorkspaceAndProject } from './archive.js'
 import { extractConversationFromSession } from './session-adapter.js'
-import type { ConversationMessage } from '@loom/distill'
+import type { ConversationMessage, SummaryConfig } from '@loom/distill'
 
 export interface CordisLogger {
   debug(message: string, ...args: unknown[]): void
@@ -49,6 +49,7 @@ export interface LoomPluginConfig {
   outputDir?: string
   workspace?: string
   project?: string
+  summary?: SummaryConfig
 }
 
 export class LoomPluginService {
@@ -113,6 +114,7 @@ export class LoomPluginService {
       project,
       title: options.title,
       outputDir: options.outputDir ?? this.config.outputDir,
+      summary: options.summary ?? this.config.summary,
       ...options,
     })
 
@@ -152,6 +154,7 @@ export class LoomPluginService {
       project,
       title: options.title,
       outputDir: options.outputDir ?? this.config.outputDir,
+      summary: options.summary ?? this.config.summary,
       ...options,
     })
 
@@ -181,6 +184,8 @@ export class LoomPluginService {
 export const name = 'dsh-loom'
 
 export function apply(ctx: CordisContext, config: LoomPluginConfig = {}): void {
+  // A headless DSH summary may load this bundle; never archive the summarizer itself.
+  if (process.env.LOOM_SUMMARY_RUNTIME === '1') return
   const logger: CordisLogger = {
     debug: (msg, ...args) => {
       try { ctx.logger?.debug?.(msg, ...args) } catch {}
