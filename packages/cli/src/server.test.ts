@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Server } from 'node:http'
 import { startArchiveServer } from './server.js'
-import { workspaceId } from './config.js'
+import { defaultConfigPath, legacyConfigPath, saveConfig, workspaceId, type Config } from './config.js'
 
 const servers: Server[] = []
 const directories: string[] = []
@@ -100,4 +100,46 @@ it('starts without an archive directory and reports an empty state', async () =>
   expect(response.status).toBe(200)
   expect(await response.text()).toContain('暂无归档')
   await expect(startArchiveServer({ port: -1 })).rejects.toThrow('Port')
+})
+it('loads only the repository-local config from a Git subdirectory and refreshes flat records', async () => {
+  const { root, directory } = await setup()
+  await writeFile(join(directory, 'global.md'), '# Unrelated global archive\n')
+  const workspace = join(root, 'local-project')
+  const nested = join(workspace, 'src')
+  const outputDir = join(workspace, '.loom', 'records')
+  await mkdir(nested, { recursive: true })
+  await mkdir(join(workspace, '.git'))
+  const config: Config = { version: 1, workspace, outputDir, archiveLayout: 'flat', providers: ['codex'], intervalSeconds: 300 }
+  await saveConfig(defaultConfigPath(workspace), config)
+  await saveConfig(legacyConfigPath(workspace, root), { ...config, outputDir: join(root, 'records'), archiveLayout: undefined })
+  const server = await startArchiveServer({ port: 0, workspace: nested, home: root })
+  servers.push(server)
+  const address = server.address() as { port: number }
+  const base = `http://127.0.0.1:${address.port}`
+  const index = await (await fetch(base)).text()
+  expect(index).toContain('local-project')
+  expect(index).toContain('1 个工作区 · 0 篇文档')
+  expect(index).not.toContain('project-123')
+  const link = index.match(/href="(\/workspaces\/[^"/]+)"/)![1]
+  await mkdir(outputDir, { recursive: true })
+  await writeFile(join(outputDir, 'local.md'), '# Repository record\n\n## Outcome\n\nDone\n')
+  await writeFile(join(outputDir, '.state.json'), 'PRIVATE_STATE')
+  expect(await (await fetch(base + link)).text()).toContain('Repository record')
+  expect(await (await fetch(base + link + '/local.md')).text()).toContain('<h2>Outcome</h2>')
+  expect((await fetch(base + link + '/.state.json')).status).toBe(404)
+  expect(await (await fetch(base)).text()).toContain('1 个工作区 · 1 篇文档')
+})
+it('browses flat records through an explicit output directory without initialization', async () => {
+  const { root } = await setup()
+  const outputDir = join(root, 'flat-records')
+  await mkdir(outputDir)
+  await writeFile(join(outputDir, 'entry.md'), '# Flat archive\n')
+  const server = await startArchiveServer({ port: 0, outputDir, home: root })
+  servers.push(server)
+  const address = server.address() as { port: number }
+  const base = `http://127.0.0.1:${address.port}`
+  const index = await (await fetch(base)).text()
+  expect(index).toContain('1 个工作区 · 1 篇文档')
+  const link = index.match(/href="(\/workspaces\/[^"/]+)"/)![1]
+  expect(await (await fetch(base + link + '/entry.md')).text()).toContain('Flat archive')
 })

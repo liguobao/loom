@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="Loom for DeepSeek Harness" width="600">
+  <img src="docs/logo.svg" alt="Loom — Keep the work, not the chat." width="600">
 </p>
 
 <p align="center">
@@ -7,228 +7,181 @@
   &nbsp;·&nbsp;
   <strong>中文</strong>
   &nbsp;·&nbsp;
-  <a href="docs/product.md">产品规范</a>
+  <a href="packages/cli/README.md">CLI 使用指南</a>
   &nbsp;·&nbsp;
-  <a href="docs/architecture.md">系统架构</a>
-  &nbsp;·&nbsp;
-  <a href="docs/end-to-end-encryption.md">端到端加密</a>
-  &nbsp;·&nbsp;
-  <a href="docs/storage-format.md">存储格式</a>
-  &nbsp;·&nbsp;
-  <a href="docs/protocol.md">协议与 API 规范</a>
+  <a href="packages/client/README.md">DSH 插件</a>
 </p>
 
 ## Keep the work, not the chat.
 
-Watch the work while it happens. Keep only what matters afterward.
+**Loom 把本地 Coding Agent 会话整理成可阅读、可回溯的 Markdown 项目记忆。**
 
-Loom（Loom for DeepSeek Harness）是建立在 **DeepSeek Harness（DSH）本地工作流之上的轻量团队协作与项目记忆层**。
+用 Coding Agent 写代码时，需求、用户纠正、排查过程和技术决策往往散落在很长的对话里。Loom 收集属于同一个项目的本地会话，提炼其中有价值的工程上下文，保存在项目旁边，方便以后回答：**做了什么、为什么这样做、哪些结果已经验证、还有什么没解决。**
 
-它不是新的 IDE，也不是新的 Agent 平台。
+**主要使用方式是独立 CLI**：通过 [Huihua](https://github.com/wibus-wee/huihua) 收集 Codex、Claude、Cursor、DeepSeek Harness 等 Coding Agent 的本地会话，再调用你配置好的本机 Codex 或 DSH Agent 生成总结。**使用 CLI 不需要安装 DSH，不需要 DSH 插件，也不依赖 Loom Server。**
 
-团队成员仍然：
+**DSH 插件只是可选接入方式之一**，适合在 DeepSeek Harness 内集成归档能力。Loom 不是“一个 DSH 插件”，也不要求所有开发流程都经过 DSH。
 
-- 在自己的本地电脑开发；
-- 使用自己的本地 Git 仓库；
-- 正常使用 DeepSeek Harness；
-- 使用自己习惯的模型和工具；
-- 在本地执行 Terminal、文件操作、测试和代码修改；
-- 在本地保存完整 Conversation。
+Loom 不是新 IDE、Agent 编排平台，也不是原始聊天记录同步工具。你可以继续使用现有编辑器、Agent、模型和 Git 工作流。
 
-Loom 不改变这个工作方式，只补充两类能力：
+## Loom 能做什么
 
-1. **工作进行时**，团队成员可以在权限允许的情况下实时查看另一个成员当前本地 DSH Agent 的工作状态和 Conversation。
-2. **工作结束后**，完整 Conversation 仍留在用户本地，只把压缩后的高价值工程记录以 Markdown 形式上传到 Loom Server，形成团队可搜索、可回溯的项目记忆。
+- **按工作区收集**：识别当前项目及其子目录的本地会话，不把无关项目的对话混入归档。
+- **保留工程上下文**：总结需求、用户纠正、关键交互、问题定位、技术决策、被否决的方案、结果与待办。
+- **结合执行证据**：纳入相关工具结果、报错和测试证据，区分用户要求、Agent 声称完成与实际验证的结果。
+- **增量更新**：同一会话更新同一份 Markdown；未变化的会话跳过总结调用。总结失败时保留已有记录，后续可重试。
+- **手动或自动归档**：支持单次执行、前台持续扫描，以及 macOS/Linux 的工作区级后台服务。
+- **直接阅读和浏览**：可以直接打开 Markdown，也可以通过 CLI 自带的本地只读 Web 服务浏览。
+- **保持本地控制**：原始对话留在各 Agent 的本地存储中；总结输入和写入的记录都会经过敏感信息脱敏。
 
-底层通信与端到端安全传输复用自 [ds-harness-remote](https://github.com/liguobao/ds-harness-remote) 的成熟实现。
+## 快速开始：独立 CLI
 
-## 主要特性
+需要 **Node.js 22.18+**，以及已安装、配置好的本机总结 Agent：**Codex 或 DSH**。生成总结的 Agent 不必与原始会话使用的 Agent 相同。
 
-- **工作实时观察**：经主机所有者授权后，成员可实时只读查看其本地 DSH Agent 工作状态与会话流。
-- **默认端到端加密**：实时会话采用双向端到端加密（`Noise_IK_25519_ChaChaPoly_SHA256`）。服务端仅透传不透明密文，无法读取 Prompt、回复内容、终端输入输出或源代码。
-- **本地否决权**：主机本地策略拥有最高控制权。服务端 ACL 无法强行共享本地会话。
-- **持久项目记忆**：工作结束后，充满调试流水和工具调用的原始对话留在本地，仅将提炼出的高价值决策生成结构化 Markdown 记录。
-- **以 Markdown 为真源**：归档记录以 `.md` 文件持久化保存在磁盘上。SQLite 仅作为辅助索引和控制面。
-- **本地敏感信息脱敏**：API Key、Token、私钥、密码、数据库连接串及 `.env` 敏感配置在离开机器前于本地完成脱敏。
-- **无感工作流**：保持 `cd project && dsh` 的日常习惯。不强制统一云端 IDE，不要求开工先提工单，不搞多 Agent 复杂编排。
+```sh
+npm install -g @liguobao/loom-cli
+cd /path/to/project
+
+# 收集支持的本地会话，并保存当前工作区的总结后端。
+loom init --summarizer codex-server
+
+# 单次生成或更新 Markdown 工作记录。
+loom archive
+
+# 打开 http://127.0.0.1:8787 浏览记录。
+loom server
+```
+
+`loom init` 默认启用 Huihua 支持的全部会话来源。运行 `loom providers` 可查看来源 ID，也可以用 `--providers codex,claude,deepseek` 限定收集范围。
+
+默认配置和记录保存在工作区的 `.loom` 目录中。在 Git 仓库内运行时，Loom 会将工作区定位到 Git 根目录：
+
+```text
+your-project/
+├── .git/
+├── .loom/
+│   ├── config.json
+│   └── records/
+│       └── <session-source-hash>.md
+└── ...
+```
+
+使用 `loom init --output /path/to/archives` 可以把记录放到其他目录。自定义输出目录下按 `<项目名>-<工作区哈希>/` 分组。已有的 `~/.loom/workspaces/` 旧版配置仍可继续使用。
+
+**默认把 `.loom` 当作私有目录。** 建议在项目的 `.gitignore` 中加入 `.loom/`；需要分享时，再审阅并挑选记录。自动脱敏不能保证移除所有密钥或敏感内容。
+
+源码与 tarball 安装、自定义会话路径、配置和各平台说明见 [CLI 使用指南](packages/cli/README.md)。
+
+### 自动归档
+
+```sh
+# 前台运行：立即扫描，此后按配置间隔重复执行。
+loom watch
+
+# 后台服务：macOS LaunchAgent 或 Linux systemd 用户服务。
+loom schedule install
+loom schedule status
+loom schedule uninstall
+```
+
+默认在每次扫描完成后等待 300 秒再执行下一次。持续扫描和后台归档处理的是当前会话快照，不会自动把进行中的任务标记为已完成。本地浏览服务本身不收集会话、不调用总结模型；自动归档需要另行运行 `loom watch` 或后台服务，刷新页面即可查看新记录。
+
+### 选择总结 Agent
+
+```sh
+loom archive --summarizer codex-server
+loom archive --summarizer dsh
+```
+
+- `codex-server`：调用本机 `codex app-server --stdio`，复用你的 Codex 配置和认证。
+- `dsh`：调用本机 DSH 无头 CLI，使用你的 DSH 模型配置。**这不需要安装 Loom 的 DSH 插件。**
+
+Loom 不另外配置托管模型 API。本机 Agent 仍可能按其配置调用远程模型服务，总结输入的数据处理边界取决于所选服务商。可执行文件路径、profile 等设置见[总结后端说明](packages/cli/README.md#local-summarization-backend)。
 
 ## 工作原理
 
 ```text
-主机 DSH 设备（本地）                Loom 服务端（不透明中继）         观察者客户端（Web / CLI）
-  DSH Agent / 本地会话
-             │
-      本地主机插件
-  （Noise IK E2EE 加密）─────────────► WSS 中继 ─────────────►（Noise IK E2EE 解密）
-             │                        （无法解密）                     │
-      工作结束（本地）                                          只读实时观察界面
-             │
-      提炼 + 本地脱敏
-             │
-   Markdown 工程记录 ────────────────► 写入磁盘（.md 文件）
-（Front Matter + 正文）                 + SQLite FTS5 索引 ────────► 检索项目知识库
+本地 Coding Agent 会话存储
+  Codex / Claude / Cursor / DeepSeek Harness / ...
+                       │
+              Huihua 收集会话
+              + 工作区匹配
+                       │
+              本地敏感信息脱敏
+                       │
+              已配置的本机总结 Agent
+              （Codex 或 DSH）
+                       │
+              结构化总结 + 再次脱敏
+                       │
+              项目 Markdown 工作记录
+                       │
+              直接阅读文件 / loom server
 ```
 
-Loom 服务端完全无需接触会话明文。实时数据流过加密管道，历史归档也仅包含脱敏后的结构化 Markdown。
+收集、归档和浏览都在你的机器上运行。独立 CLI 工作流不会向 Loom Server 上传记录，也不要求部署团队协作组件。
 
-## 观察者权限级别
+## 工作记录保留什么
 
-| 级别 | 其他人能看到什么 |
+记录是带有 YAML Front Matter 的 Markdown 文档，元数据用于标识来源与工作区，正文保留有价值的工程上下文：
+
+| 章节 | 内容 |
 |---|---|
-| `hidden` | 隐身。主机不对外广播活动状态。 |
-| `presence` | 用户在线、所属项目标识、工作标题、已进行时长。 |
-| `observe` | 通过端到端加密安全通道实时接收只读会话流。 |
+| Goal | 要解决的问题 |
+| Requirements | 初始需求、后续新增要求、约束与纠正 |
+| Interaction Summary | 按来源顺序梳理关键尝试、反馈、失败、修复与最终状态 |
+| Outcome | 工作结果与验证情况 |
+| Investigation | 问题定位过程 |
+| Key Decisions | 技术选择及其原因 |
+| Rejected Approaches | 尝试过或被排除的方案 |
+| Follow-ups | 未解决的问题与下一步 |
 
-建立连接需要三重校验全部通过：
-1. **服务端 ACL**：组织、工作区和项目成员资格校验。
-2. **主机本地策略**：本地开启共享开关，并核对本地授权名单。
-3. **对等方身份**：经本地锁定的 X25519 设备公钥身份验证。
+它是语义总结，不是复制聊天记录，也不是按固定字数截取原文。长会话会分段总结再合并；只有工具调用不代表执行成功，已经缺失或被压缩掉的源历史也无法凭空还原。
 
-第一版中，观察者模式为严格只读。观察者无法发送 Prompt、批准危险权限、修改文件或执行终端命令。
+## 可选接入：DSH 插件
 
-## 工程记录（Work Record）格式
-
-工程记录以带有 YAML Front Matter 的 Markdown 文件存储。文件存储结构如下：
-
-```text
-data/organizations/<org-id>/workspaces/<ws-id>/projects/<proj-id>/records/<year>/<month>/<ulid>.md
-```
-
-记录保留关键工程判断与上下文，剔除冗长对话流水：
-
-```markdown
----
-id: 01KABC123
-organization: org_1
-workspace: ws_1
-project: loom
-owner: user_1
-created_at: 2026-10-01T01:30:00+08:00
-completed_at: 2026-10-01T02:10:00+08:00
-repository: liguobao/loom
-branch: feat/live-view
-base_commit: abc123
-final_commit: def456
-tags:
-  - remote
-  - websocket
-source_conversation_count: 2
----
-
-# 增加团队成员实时查看本地 DSH Agent 的能力
-
-## Goal
-允许同一 Workspace 中的成员，在 owner 授权的前提下，实时只读查看其当前本地 DSH Conversation。
-
-## Outcome
-完成只读 Observer 模式，支持成员查看 Conversation stream 和 Agent 状态，但不能发送 Prompt、批准权限或使用 Terminal。
-
-## Investigation
-最初考虑直接复用现有 Remote Client 权限模型。进一步确认 ds-harness-remote 当前主要基于同账号 membership，因此 Loom 需要在此之上增加组织级 membership 和跨用户授权。
-
-## Key Decisions
-- 实时查看默认只读。
-- Loom Server 不读取 Conversation 明文。
-- Host 本地策略拥有最终否决权。
-- 复用 ds-harness-remote 现有的 Noise E2EE transport。
-
-## Rejected Approaches
-### 把完整 Conversation 同步到 Server
-放弃。会增加隐私风险，违背 Loom 的 local-first 原则。
-
-## Changed Areas
-- packages/remote/observer.ts
-- apps/server/permissions.ts
-- apps/web/live-view.tsx
-
-## Follow-ups
-以后可以考虑显式开启协作模式，但第一版不允许跨用户控制 Agent。
-```
-
-## 安装
-
-### CLI 安装与定时归档
-
-新增独立 TypeScript CLI，基于 [huihua](https://github.com/wibus-wee/huihua) 收集 Codex、Claude、Cursor、DeepSeek Harness 等工具的本地会话。需要 Node.js **22.18+**。
-
-从 npm 安装：
-
-```sh
-npm install -g @liguobao/loom-cli@0.1.0
-cd /path/to/project
-loom init --providers codex,claude,deepseek --interval 300
-loom archive --summarizer codex-server     # 调用本机 Codex 生成总结
-loom schedule install --summarizer codex-server  # 后台定时总结（macOS / Linux）
-loom schedule status
-```
-
-前台运行可使用 `loom watch --summarizer codex-server`，或用 `--summarizer dsh` 选择本机 DSH；删除后台服务使用 `loom schedule uninstall`。默认每 300 秒扫描一次，仅归档当前工作区及其子目录的会话。记录保存在 `~/.loom/records/<项目名>-<工作区哈希>/`，同一会话更新同一份脱敏 Markdown 总结，覆盖全轮次需求、约束、按时间顺序的关键交互、失败与修复、决策、结果和待办，并结合工具调用、执行结果、报错及测试证据区分已验证与未验证的工作；未变化的会话自动跳过。原始会话仍留在本地，不上传服务器。
-
-源码安装、自定义会话路径、Windows 调度方式和配置说明见 [CLI 文档](packages/cli/README.md)。CLI 已发布为 `@liguobao/loom-cli`，CI 和 GitHub Release 也提供打包产物。
-
-### 浏览本地工作记录
-
-运行 `loom serve` 后打开 **http://127.0.0.1:8787**，查看工作区列表、对应的
-Markdown 文档、预览及原文。可用 `--output /path/to/archives` 指定归档目录，
-或用 `--port 9000` 更改端口。刷新页面即可看到新记录，Ctrl+C 停止服务。
-
-### 插件安装
-
-通过 DSH 插件管理器为 `web` profile 添加：
+如果你已经使用 DeepSeek Harness，希望在其运行时内集成归档，可以安装插件：
 
 ```sh
 dsh plugin --profile web add -w @liguobao/dsh-loom@0.1.0
 ```
 
-安装后请重启 Harness。
+安装后重启 Harness。插件在本地归档，与 CLI 共用总结引擎。其配置和存储方式见 [DSH 插件文档](packages/client/README.md)。
 
-### Web 管理界面
+**三个选择互相独立**：会话来源决定“收集谁的记录”，总结后端决定“用谁生成总结”，DSH 插件决定“如何接入 DSH 运行时”。把 DSH 选作会话来源或总结后端，并不意味着必须安装插件。
 
-```sh
-cd apps/web
-pnpm dev
-```
+## 团队协作与架构
 
-浏览器打开 `http://localhost:5173` 即可浏览项目记忆库、查看团队正在进行的活动并检索过往技术决策。
+Loom 仓库也包含协议、加密、索引和 Web 界面组件，用于更完整的团队项目记忆与只读观察设计。**这部分与上面的独立本地归档路径分开。** 安装 CLI 或插件本身，不会自动开启团队实时观察或服务端检索。
 
-## 端到端加密
+团队设计涉及经所有者授权的观察、本地主机最终否决权、服务端 ACL，以及使用 `Noise_IK_25519_ChaChaPoly_SHA256` 的实时流端到端加密。这些属于协作链路的安全边界，不意味着本地 Markdown 归档已加密。Loom Server 在独立闭源仓库维护，本地归档不需要它。`apps/web` 的 React 团队看板也不同于 CLI 自带的本地浏览页面。
 
-Loom 复用了 [ds-harness-remote](https://github.com/liguobao/ds-harness-remote) 相同的端到端加密协议套件：
-
-- **套件**：`Noise_IK_25519_ChaChaPoly_SHA256`
-- **身份**：每台设备本地生成的静态 X25519 公私钥对
-- **握手**：发起方（观察者）已知主机静态公钥发起加密握手，主机派生临时密钥协商加密通信密钥
-- **传输**：双向独立的大端序单调递增计数器 Nonce，防重放攻击
-
-详细协议格式、密钥生命周期与安全边界说明参见[端到端加密文档](docs/end-to-end-encryption.md)。
-
-## 仓库边界
-
-本代码仓库包含全部开源客户端生态与协议：
-- `packages/protocol`：共享核心模型、Zod 校验 schema 与 WebSocket 协议。
-- `packages/crypto`：Noise IK 加解密协议实现与密钥管理工具。
-- `packages/db`：SQLite 建表管理、数据操作与 FTS5 全文索引构建器。
-- `packages/distill`：对话蒸馏、Git 变更提取与本地密钥脱敏引擎。
-- `packages/cli`（`@liguobao/loom-cli`）：可独立安装的 TypeScript CLI、huihua 会话收集和后台定时归档。
-- `packages/client`（`@liguobao/dsh-loom`）：DeepSeek Harness 本地插件与交互客户端 SDK。
-- `apps/web`：React 19 Web 前端管理看板。
-
-**Loom Server 属于闭源独立项目**，由单独仓库维护。开源客户端统一依照标准化的[协议与 API 交互规范文档](docs/protocol.md)与后端服务进行互操作对接。
-
-## 安全与隐私
-
-- 会话传输全链路端到端加密，中继服务端无法获取会话明文或私钥。
-- 敏感信息在离开开发者本地机器前执行本地脱敏。
-- 观察者无法直接调用终端、注入指令或代为批准敏感工具操作。
-- SQLite 索引损坏或丢失不影响磁盘上的 Markdown 正文，且可由文件重新扫描生成索引。
-
-## 详细文档
+以下文档描述的是面向 DSH 的团队协作设计，不是使用 CLI 的前置条件：
 
 - [产品规范与原则](docs/product.md)
 - [系统架构与三平面模型](docs/architecture.md)
 - [端到端加密规范](docs/end-to-end-encryption.md)
-- [存储格式规范](docs/storage-format.md)
+- [团队存储格式](docs/storage-format.md)
 - [协议与 API 交互规范](docs/protocol.md)
+
+## 仓库结构
+
+| 路径 | 职责 |
+|---|---|
+| `packages/cli` | 独立 CLI：会话收集、定时归档与本地浏览 |
+| `packages/distill` | 共用语义总结、Git 上下文与敏感信息脱敏 |
+| `packages/client` | 可选 DSH 插件与客户端集成 |
+| `packages/protocol` | 共享类型、校验 schema 与 WebSocket 协议 |
+| `packages/crypto` | Noise IK 加密、设备密钥与 token 工具 |
+| `packages/db` | 团队协作组件使用的 SQLite 数据访问与 FTS5 索引 |
+| `apps/web` | React 团队看板 |
+
+## 安全与隐私
+
+- 本地记录是可读 Markdown，不是加密归档。请保护存储目录，分享或提交前审阅内容。
+- 正则脱敏无法识别所有敏感信息；总结输入实际在哪里处理，取决于所选 Agent 和模型服务商。
+- 总结失败或输出无效时保留已有记录，不用原始对话截取片段替代总结。
+- 本地浏览服务只监听 `127.0.0.1`，且为只读；它不是公开分享服务。
 
 ## Star 趋势
 
@@ -240,11 +193,10 @@ Loom 复用了 [ds-harness-remote](https://github.com/liguobao/ds-harness-remote
  </picture>
 </a>
 
-## 项目地位与商标
+## 项目与商标
 
-本项目为独立的开源社区项目，面向 DeepSeek Harness 生态设计。
-DeepSeek 及相关商标属于其各自持有者。
+Loom 是面向本地 Coding Agent 工作流的独立开源项目，不是任何所支持 Agent 或模型服务商的官方产品。相关产品名称与商标属于各自持有者。
 
 ## 许可证
 
-[MIT](LICENSE)
+MIT

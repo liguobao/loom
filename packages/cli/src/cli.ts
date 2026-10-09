@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { stat } from 'node:fs/promises'
+import { mkdir, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { sessions } from 'huihua'
 import { archiveWorkspace } from './archive.js'
-import { atomicWrite, canonicalWorkspace, defaultConfigPath, loadConfig, loomHome, validateConfig, type Config } from './config.js'
+import { defaultConfigPath, findConfigPath, loadConfig, resolveWorkspace, saveConfig, validateConfig, type Config } from './config.js'
 import { schedule } from './schedule.js'
 import { startArchiveServer } from './server.js'
 import { createSummaryModel, resolveSummaryCommand } from './model.js'
@@ -20,11 +20,13 @@ Usage:
   loom watch [--workspace path | --config file]
   loom schedule install|uninstall|status [--workspace path | --config file]
   loom providers
-  loom serve [--port 8787] [--output path | --config file]
+  loom server [--workspace path] [--port 8787] [--output path | --config file]
+  loom serve           Alias for server
 
 Options:
+  --workspace path     Workspace path (default: current Git root or directory)
   --port number        Local browser server port (default: 8787)
-  --output path        Archive directory (default: ~/.loom/records)
+  --output path        Archive directory (default: <workspace>/.loom/records)
   --interval seconds   Time between scans (default: 300, range: 1..86400)
   --summarizer backend Local summary backend: codex-server or dsh
   --summary-command p  Executable path (default: codex or dsh)
@@ -35,6 +37,7 @@ Options:
   --version, -v        Show version
 
 init defaults to all Huihua providers. roots/homeDir can be set in JSON.
+init stores config and records in the Git root's .loom directory (or current directory outside Git).
 Archives are redacted Markdown summaries; original agent stores are read only.
 `
 async function main(): Promise<void> {
@@ -50,12 +53,12 @@ async function main(): Promise<void> {
   if (values.version) { console.log(LOOM_CLI_VERSION); return }
   if (values.help || !positionals.length) { console.log(help); return }
   const [command, action] = positionals
-  if (!['init', 'archive', 'watch', 'schedule', 'providers', 'serve'].includes(command)) throw new Error(`Unknown command: ${command}`)
+  if (!['init', 'archive', 'watch', 'schedule', 'providers', 'server', 'serve'].includes(command)) throw new Error(`Unknown command: ${command}`)
   if (positionals.length > (command === 'schedule' ? 2 : 1)) throw new Error('Unexpected positional arguments')
   if (command === 'providers') { console.log(sessions.providers().map(p => p.id).join('\n')); return }
-  if (command === 'serve') {
+  if (command === 'server' || command === 'serve') {
     const server = await startArchiveServer({ port: values.port === undefined ? undefined : Number(values.port),
-      outputDir: values.output ? resolve(values.output) : undefined, configPath: values.config ? resolve(values.config) : undefined })
+      workspace: values.workspace, outputDir: values.output ? resolve(values.output) : undefined, configPath: values.config ? resolve(values.config) : undefined })
     const address = server.address()
     console.log(`Loom archive browser: http://127.0.0.1:${typeof address === 'object' && address ? address.port : values.port || 8787}`)
     console.log('Press Ctrl+C to stop. Refresh the page to see new archives.')
@@ -63,8 +66,8 @@ async function main(): Promise<void> {
     process.once('SIGINT', stop); process.once('SIGTERM', stop)
     return
   }
-  const workspace = await canonicalWorkspace(values.workspace || process.cwd())
-  const configPath = resolve(values.config || defaultConfigPath(workspace))
+  const workspace = await resolveWorkspace(values.workspace || process.cwd())
+  const configPath = resolve(values.config || (command === 'init' ? undefined : await findConfigPath(workspace)) || defaultConfigPath(workspace))
   const summaryOverride = (existing: Config['summary']): Config['summary'] => {
     if (!values.summarizer && !values['summary-command'] && !values['summary-profile']) return existing
     const provider = values.summarizer || existing?.provider
@@ -80,11 +83,14 @@ async function main(): Promise<void> {
       try { await stat(configPath); throw new Error(`Config exists: ${configPath}. Use --force to replace it.`) }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     }
-    config = validateConfig({ version: 1, workspace, outputDir: resolve(values.output || process.env.LOOM_STORAGE_DIR || join(loomHome(), 'records')),
+    const customOutput = values.output || process.env.LOOM_STORAGE_DIR
+    config = validateConfig({ version: 1, workspace, outputDir: resolve(customOutput || join(workspace, '.loom', 'records')),
+      archiveLayout: customOutput ? 'workspace' : 'flat',
       providers: values.providers ? values.providers.split(',').map(p => p.trim()) : sessions.providers().map(p => p.id),
       intervalSeconds: Number(values.interval || 300), summary: summaryOverride(undefined) })
-    await atomicWrite(configPath, JSON.stringify(config, null, 2) + '\n')
-    console.log(`Created ${configPath}\nRun loom archive --summarizer codex-server, or use --summarizer dsh.`)
+    await mkdir(config.outputDir, { recursive: true, mode: 0o700 })
+    await saveConfig(configPath, config)
+    console.log(`Created ${configPath}\nArchives: ${config.outputDir}\nRun loom archive --summarizer codex-server, or use --summarizer dsh.\nBrowse with loom server.`)
     return
   }
   try { config = await loadConfig(configPath) }
@@ -105,7 +111,7 @@ async function main(): Promise<void> {
     if (action === 'install') {
       createSummaryModel(config.summary)
       config.summary = await resolveSummaryCommand(config.summary!)
-      await atomicWrite(configPath, JSON.stringify(config, null, 2) + '\n')
+      await saveConfig(configPath, config)
     }
     console.log(await schedule(action || '', config, configPath)); return
   }

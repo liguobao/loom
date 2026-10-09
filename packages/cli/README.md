@@ -1,6 +1,8 @@
 # Loom CLI
 
-TypeScript CLI for periodically archiving local Coding Agent sessions by workspace.
+The primary entry point for Loom: a standalone TypeScript CLI that turns local
+Coding Agent sessions into Markdown project memory, grouped by workspace.
+It does not require DeepSeek Harness, the DSH plugin or a Loom Server.
 Session collection uses [Huihua](https://github.com/wibus-wee/huihua), pinned to 0.4.1.
 Requires Node.js **22.18 or newer**.
 
@@ -34,7 +36,25 @@ loom archive --summarizer codex-server
 loom watch --summarizer codex-server
 ```
 
-`init` writes a per-workspace config under `~/.loom/workspaces/<workspace-hash>/config.json`.
+`init` creates a dedicated `.loom/` directory in the Git repository root. Running
+from a repository subdirectory finds the same root, including Git worktrees.
+Outside Git, it uses the specified workspace or current directory.
+
+```text
+project/
+  .loom/
+    config.json
+    records/
+      <session-source-hash>.md
+      .state.json
+```
+
+The config stores relative workspace/output paths, so the directory can move with the
+repository. `archive`, `watch`, `schedule` and `server` discover this local config first;
+existing configs under `~/.loom/workspaces/<workspace-hash>/config.json` remain supported
+when no local config exists. `init` only initializes storage; run `archive` or `watch`
+to collect and summarize conversations. Review archives before committing them, or
+add `.loom/` to your repository's `.gitignore` if they should remain local.
 Without `--providers`, it enables all providers supported by Huihua. `loom providers`
 prints the available IDs. `--workspace /absolute/path` lets you run from another directory.
 Workspace matching includes subdirectories and resolves existing symlinks. Sessions without
@@ -52,24 +72,28 @@ loom archive --workspace /path/to/project --summarizer codex-server
 ## Browse archives in a local browser
 
 ```sh
-loom serve
+loom server
 # Open http://127.0.0.1:8787
 ```
 
 The read-only server lists workspaces and their Markdown records, with a simple
-Markdown preview and expandable original source. It reads `~/.loom/records` (or
-`LOOM_STORAGE_DIR`) and custom output directories from workspace configs under
-`LOOM_HOME`. Registered workspaces appear even before their first archive.
+Markdown preview and expandable original source. In an initialized repository,
+it reads only that repository's configured archive directory (by default `.loom/records`),
+not other projects' global archives. The workspace appears even before its first archive.
+Without a matching config, it falls back to the legacy global archive roots and configs.
+`loom serve` remains an alias for `loom server`.
 Refresh the page to see newly archived documents.
 
 ```sh
-loom serve --port 9000
-loom serve --output /path/to/archives
-loom serve --config /path/to/config.json
+loom server --port 9000
+loom server --workspace /path/to/project
+loom server --output /path/to/archives
+loom server --config /path/to/config.json
 ```
 
 `--output` browses the specified archive root; `--config` uses the output directory
-from that config. No `loom init` is required to browse an existing archive root.
+from that config. Both flat record directories and legacy per-workspace subdirectories
+are supported. No `loom init` is required to browse an existing archive root.
 The server listens on `127.0.0.1` only. Ctrl+C stops it. It does not collect sessions
 or call a summary model; run `loom watch` separately for automatic archiving.
 
@@ -100,7 +124,7 @@ The computer must be awake; scans resume when the watcher can run again.
 ## Custom session roots
 
 Use `--config /path/to/config.json` on any command. Paths in JSON are relative to the
-config file; use absolute paths for portability. Provider roots replace Huihua's defaults.
+config file; repository-local relative paths move with the project. Provider roots replace Huihua's defaults.
 `homeDir` optionally isolates discovery from the current user's home; otherwise Huihua
 honors its documented provider environment variables.
 
@@ -118,8 +142,10 @@ honors its documented provider environment variables.
 }
 ```
 
-`LOOM_HOME` changes the config/log base directory. `LOOM_STORAGE_DIR` overrides the default
-archive output during `init`; output is saved in config for subsequent runs.
+`LOOM_HOME` changes the legacy global config/log base directory, not the repository-local
+`.loom/` directory. `--output` or `LOOM_STORAGE_DIR` overrides the default archive output
+during `init` and uses the legacy per-workspace subdirectory layout; output is saved in
+config for subsequent runs.
 
 ## Local summarization backend
 
@@ -163,7 +189,10 @@ archived, to prevent the collector from repeatedly summarizing its own sessions.
 
 ## Archive behavior
 
-Records live at `<outputDir>/<project-name>-<workspace-hash>/<session-source-hash>.md`.
+New repository-local records live at `.loom/records/<session-source-hash>.md`
+(`"archiveLayout": "flat"`). Legacy configs and custom output roots retain
+`<outputDir>/<project-name>-<workspace-hash>/<session-source-hash>.md`
+(`"archiveLayout": "workspace"`, also the default when this field is absent).
 The local agent synthesizes **all collected user and assistant text and execution evidence** into Goal, Requirements,
 Interaction Summary, Outcome, Investigation, Key Decisions, Rejected Approaches and Follow-ups.
 Requirements covers initial requests, later additions, constraints and corrections. Interaction

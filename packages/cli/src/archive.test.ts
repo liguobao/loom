@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { appendFile, mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { sessions, type Session } from 'huihua'
 import { archiveWorkspace as collectWorkspace, inWorkspace, type Collector } from './archive.js'
 import type { SummaryModel } from './summary.js'
@@ -40,6 +40,17 @@ async function setup() {
   return { config, root, source, fixture }
 }
 describe('workspace archiving through Huihua', () => {
+  it('writes repository-local records and checkpoints directly in the flat archive directory', async () => {
+    const { config } = await setup()
+    config.outputDir = join(config.workspace, '.loom', 'records')
+    config.archiveLayout = 'flat'
+    const first = await archiveWorkspace(config)
+    expect(first.failures).toEqual([])
+    expect(first.archived).toBe(1)
+    expect(dirname(first.files[0])).toBe(config.outputDir)
+    expect((await readdir(config.outputDir)).sort()).toEqual(['.state.json', basename(first.files[0])].sort())
+    expect((await archiveWorkspace(config)).unchanged).toBe(1)
+  })
   it('scans real Codex JSONL, redacts, skips repeats and updates one stable record', async () => {
     const { config, source, fixture } = await setup()
     const first = await archiveWorkspace(config)

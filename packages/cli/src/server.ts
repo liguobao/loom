@@ -1,11 +1,11 @@
 import { createServer, type Server } from 'node:http'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import { digest, loomHome, workspaceId } from './config.js'
+import { archiveDirectory, digest, findConfigPath, loomHome, resolveWorkspace } from './config.js'
 
 interface Workspace { id: string; name: string; path?: string; directory: string; files: Document[] }
 interface Document { name: string; title: string; updated: string }
-export interface ServeOptions { port?: number; outputDir?: string; configPath?: string; home?: string }
+export interface ServeOptions { port?: number; workspace?: string; outputDir?: string; configPath?: string; home?: string }
 const escape = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 const missing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT'
 async function entries(path: string) {
@@ -35,14 +35,18 @@ async function catalog(options: ServeOptions): Promise<Workspace[]> {
       const output = resolve(options.outputDir || resolve(dirname(file), config.outputDir))
       if (!options.outputDir) roots.add(output)
       const name = basename(workspace) || 'workspace'
-      known.set(join(output, `${name}-${workspaceId(workspace)}`), { name, path: workspace })
+      known.set(archiveDirectory({ workspace, outputDir: output, archiveLayout: config.archiveLayout }), { name, path: workspace })
     } catch (error) {
       if (options.configPath) throw error
       // One stale or malformed workspace config must not hide the other archives.
     }
   }
   const directories = new Set<string>(known.keys())
-  for (const root of roots) for (const entry of await entries(root)) if (entry.isDirectory() && !entry.name.startsWith('.')) directories.add(join(root, entry.name))
+  for (const root of roots) {
+    const children = await entries(root)
+    if (children.some(entry => entry.isFile() && !entry.name.startsWith('.') && entry.name.toLowerCase().endsWith('.md'))) directories.add(root)
+    for (const entry of children) if (entry.isDirectory() && !entry.name.startsWith('.')) directories.add(join(root, entry.name))
+  }
   const workspaces: Workspace[] = []
   for (const directory of directories) {
     const files: Document[] = []
@@ -104,6 +108,11 @@ function page(title: string, content: string): string {
 export async function startArchiveServer(options: ServeOptions = {}): Promise<Server> {
   const port = options.port ?? 8787
   if (!Number.isSafeInteger(port) || port < 0 || port > 65535) throw new Error('Port must be an integer between 0 and 65535')
+  if (!options.configPath && !options.outputDir && (!options.home || options.workspace)) {
+    const workspace = await resolveWorkspace(options.workspace || process.cwd())
+    const configPath = await findConfigPath(workspace, options.home)
+    if (configPath) options = { ...options, configPath }
+  }
   await catalog(options)
   const server = createServer(async (req, res) => {
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
@@ -138,7 +147,7 @@ export async function startArchiveServer(options: ServeOptions = {}): Promise<Se
     } catch (error) {
       if (error instanceof URIError) send(400, '请求无效', '<h1>请求地址无效</h1>')
       else if (missing(error)) send(404, '未找到', '<h1>文档不存在，请刷新列表</h1>')
-      else { console.error('loom serve:', error); send(500, '读取失败', '<h1>无法读取归档目录</h1>') }
+      else { console.error('loom server:', error); send(500, '读取失败', '<h1>无法读取归档目录</h1>') }
     }
   })
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => { server.removeListener('error', reject); resolve() }) })

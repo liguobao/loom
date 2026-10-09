@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="Loom for DeepSeek Harness" width="600">
+  <img src="docs/logo.svg" alt="Loom — Keep the work, not the chat." width="600">
 </p>
 
 <p align="center">
@@ -7,229 +7,181 @@
   &nbsp;·&nbsp;
   <a href="README.zh.md">中文</a>
   &nbsp;·&nbsp;
-  <a href="docs/product.md">Product Spec</a>
+  <a href="packages/cli/README.md">CLI Guide</a>
   &nbsp;·&nbsp;
-  <a href="docs/architecture.md">Architecture</a>
-  &nbsp;·&nbsp;
-  <a href="docs/end-to-end-encryption.md">E2EE</a>
-  &nbsp;·&nbsp;
-  <a href="docs/storage-format.md">Storage Format</a>
-  &nbsp;·&nbsp;
-  <a href="docs/protocol.md">Protocol & API</a>
+  <a href="packages/client/README.md">DSH Plugin</a>
 </p>
 
 ## Keep the work, not the chat.
 
-Watch the work while it happens. Keep only what matters afterward.
+**Loom turns local Coding Agent sessions into readable Markdown project memory.**
 
-Loom (Loom for DeepSeek Harness) is a lightweight collaboration and project-memory layer built on top of **DeepSeek Harness (DSH) local workflows**.
+Coding Agents help you build software, but the requirements, corrections, investigations and decisions behind that work are often buried in long conversations. Loom collects sessions belonging to a project, summarizes the engineering context and keeps it alongside the project so you can revisit **what was done, why it was done, what was verified and what remains unresolved**.
 
-It is not a new IDE, nor is it another Agent orchestration platform.
+The primary way to use Loom is the **standalone CLI**. It collects local sessions from Codex, Claude, Cursor, DeepSeek Harness and other Coding Agents through [Huihua](https://github.com/wibus-wee/huihua), then uses your configured local Codex or DSH agent to generate summaries. **You do not need DSH, a DSH plugin or a Loom Server to use the CLI.**
 
-Team members continue to:
+The **DSH plugin is an optional integration** for archiving within DeepSeek Harness. It is one entry point into Loom, not the definition of the project or a prerequisite for using it.
 
-- Develop locally on their own computers;
-- Use their own local Git repositories;
-- Run DeepSeek Harness normally;
-- Use their preferred models and tools;
-- Execute terminals, file operations, tests, and code changes locally;
-- Retain full conversations on their own machines.
+Loom is not an IDE, an Agent orchestration platform or a raw transcript synchronization service. Keep using your existing editor, agents, models and Git workflow.
 
-Loom preserves this workflow entirely and adds only two core capabilities:
+## What Loom does
 
-1. **While work happens**: Team members can view a colleague's current local DSH Agent status and conversation in real time with explicit permission.
-2. **After work completes**: The full conversation remains local, while only distilled high-value engineering records are uploaded to the Loom Server as Markdown, building searchable and traceable team project memory.
+- **Collects by workspace**: Finds local sessions for the current project and its subdirectories, rather than mixing unrelated conversations into one archive.
+- **Preserves engineering context**: Summarizes requirements, user corrections, key interactions, investigations, decisions, rejected approaches, outcomes and follow-ups.
+- **Uses execution evidence**: Includes relevant tool results, errors and test evidence, distinguishing requested work and agent claims from verified results.
+- **Updates incrementally**: Changed sessions update their existing Markdown record; unchanged sessions skip summary calls. Failed summaries preserve existing records and can be retried.
+- **Runs once or in the background**: Archive on demand, watch in the foreground or install a per-workspace background service on macOS/Linux.
+- **Keeps records accessible**: Read Markdown directly or browse it through the CLI's local, read-only web server.
+- **Keeps you in control**: Raw conversations stay in their original local stores. Loom applies secret redaction before summary input and before writing records.
 
-Core transport and end-to-end encryption reuse the proven stack from [ds-harness-remote](https://github.com/liguobao/ds-harness-remote).
+## Quick start: standalone CLI
 
-## Features
+Requires **Node.js 22.18+** and an installed, configured local summary agent: **Codex or DSH**. The agent supplying the summary does not have to be the agent that produced the original session.
 
-- **Watch in real time**: View a teammate's active DSH agent state and conversation stream live with owner consent.
-- **Privacy by default**: Live sessions use bidirectional end-to-end encryption (`Noise_IK_25519_ChaChaPoly_SHA256`). The server routes opaque ciphertext and cannot read prompts, responses, terminal output, or code.
-- **Local authority**: Host-local policy holds final veto over observation. Server ACL cannot force a local session to be shared.
-- **Durable project memory**: When work finishes, full noisy chat transcripts remain local. High-value engineering decisions are distilled into structured Markdown documents.
-- **Markdown as source of truth**: Archived records are stored as readable `.md` files on disk. SQLite serves solely as a disposable index and control plane.
-- **Local secret redaction**: API keys, tokens, SSH keys, passwords, and `.env` credentials are sanitized locally before Markdown records leave the machine.
-- **Non-intrusive workflow**: Keep using `cd project && dsh`. No mandatory cloud IDE, no forced task tickets, and no agent orchestration pipelines.
+```sh
+npm install -g @liguobao/loom-cli
+cd /path/to/project
+
+# Collect supported local sessions and save the summary backend for this workspace.
+loom init --summarizer codex-server
+
+# Generate or update Markdown work records once.
+loom archive
+
+# Browse the records at http://127.0.0.1:8787.
+loom server
+```
+
+`loom init` enables all providers supported by Huihua by default. Use `loom providers` to list their IDs, or limit collection with `--providers codex,claude,deepseek`.
+
+By default, configuration and records live in the workspace's `.loom` directory. Inside a Git repository, Loom resolves the workspace to the Git root:
+
+```text
+your-project/
+├── .git/
+├── .loom/
+│   ├── config.json
+│   └── records/
+│       └── <session-source-hash>.md
+└── ...
+```
+
+Use `loom init --output /path/to/archives` to store records elsewhere. Custom output roots group records under `<project-name>-<workspace-hash>/`. Existing legacy configurations under `~/.loom/workspaces/` remain supported.
+
+**Treat `.loom` as private by default.** Add `.loom/` to your project's `.gitignore` unless you deliberately want to share reviewed records. Redaction is not a guarantee that every secret or sensitive detail has been removed.
+
+For source/tarball installation, custom session roots, configuration and platform-specific details, see the [CLI guide](packages/cli/README.md).
+
+### Automatic archiving
+
+```sh
+# Foreground: scan immediately, then repeat at the configured interval.
+loom watch
+
+# Background service: macOS LaunchAgent or Linux systemd user service.
+loom schedule install
+loom schedule status
+loom schedule uninstall
+```
+
+The default interval is 300 seconds after each completed scan. `watch` and scheduled archiving summarize current snapshots; they do not automatically declare ongoing tasks completed. The local browser does not run collection or summarization: use `loom watch` or a background service separately, and refresh the page to see updates.
+
+### Choose a summary agent
+
+```sh
+loom archive --summarizer codex-server
+loom archive --summarizer dsh
+```
+
+- `codex-server` uses the installed `codex app-server --stdio` and your Codex configuration/authentication.
+- `dsh` uses the installed headless DSH CLI and your DSH model configuration. This does **not** require the Loom DSH plugin.
+
+Loom does not configure a hosted model API of its own. A local agent may still call a remote model provider according to its settings; summary input is subject to that provider's data handling. See the [summary backend guide](packages/cli/README.md#local-summarization-backend) for executable paths and profiles.
 
 ## How it works
 
 ```text
-Host DSH Machine (Local)             Loom Server (Opaque Relay)         Observer Client (Web/CLI)
-  DSH Agent / Local Session
-             │
-      Local Host Plugin
-   (E2EE Noise IK Encrypt) ─────────────► WSS Relay ─────────────► (E2EE Noise IK Decrypt)
-             │                          (Cannot Read)                      │
-    Work Complete (Local)                                            Read-only Live View
-             │
-  Distill + Secret Redact
-             │
-  Markdown Work Record ────────────────► Save to Disk (.md)
-  (Front Matter + Body)                  + SQLite FTS5 Index ────────► Search Project Memory
+Local Coding Agent session stores
+  Codex / Claude / Cursor / DeepSeek Harness / ...
+                       │
+              Huihua session collection
+              + workspace matching
+                       │
+              Local secret redaction
+                       │
+              Configured local summary agent
+              (Codex or DSH)
+                       │
+              Structured summary + redaction
+                       │
+              Project Markdown work records
+                       │
+              Read files directly / loom server
 ```
 
-The Loom Server does not need access to plaintext conversation histories. Live traffic passes through an encrypted tunnel, and historical archives consist strictly of distilled Markdown.
+Collection, archiving and browsing run on your machine. The standalone workflow does not upload records to a Loom Server or require the team collaboration stack.
 
-## Observer permission levels
+## What a work record contains
 
-| Level | What others can see |
+A record is a Markdown document with YAML front matter identifying its source and workspace. Its body captures the useful engineering context:
+
+| Section | What it preserves |
 |---|---|
-| `hidden` | Invisible. Host does not advertise active presence. |
-| `presence` | User is online, project slug, task title, and elapsed duration. |
-| `observe` | Full read-only conversation stream over end-to-end encryption. |
+| Goal | The problem being solved |
+| Requirements | Initial requests, later additions, constraints and corrections |
+| Interaction Summary | Key attempts, feedback, failures, fixes and final state in source order |
+| Outcome | Results and verification status |
+| Investigation | How the problem was located |
+| Key Decisions | Technical choices and their reasons |
+| Rejected Approaches | Alternatives that were tried or ruled out |
+| Follow-ups | Unresolved issues and next steps |
 
-Connections require tripartite approval:
-1. **Server ACL**: Organization, workspace, and project membership.
-2. **Host Local Policy**: Explicit toggle and allowlist on the local computer.
-3. **Peer Identity**: Verified X25519 device public key pinning.
+This is a semantic summary, not a copied transcript or fixed-length excerpt. Long histories are summarized in bounded chunks and merged. A tool call alone does not prove success, and missing or compacted source history cannot be reconstructed.
 
-The first version enforces strictly read-only observation. Observers cannot send prompts, approve actions, write files, or execute terminal commands.
+## Optional integration: DSH plugin
 
-## Work record structure
-
-Work records are Markdown files with YAML front matter. The filesystem layout is:
-
-```text
-data/organizations/<org-id>/workspaces/<ws-id>/projects/<proj-id>/records/<year>/<month>/<ulid>.md
-```
-
-Each record contains structured engineering context rather than conversational noise:
-
-```markdown
----
-id: 01KABC123
-organization: org_1
-workspace: ws_1
-project: loom
-owner: user_1
-created_at: 2026-10-01T01:30:00+08:00
-completed_at: 2026-10-01T02:10:00+08:00
-repository: liguobao/loom
-branch: feat/live-view
-base_commit: abc123
-final_commit: def456
-tags:
-  - remote
-  - websocket
-source_conversation_count: 2
----
-
-# Add real-time observer capability for team members
-
-## Goal
-Allow workspace members to observe an active DSH session in read-only mode.
-
-## Outcome
-Completed read-only Observer mode with E2EE stream relay.
-
-## Investigation
-Evaluated ds-harness-remote single-account transport. Extended it with
-organization membership and cross-user authorization.
-
-## Key Decisions
-- Real-time observation is strictly read-only by default.
-- Server acts as an opaque ciphertext relay and never decrypts traffic.
-- Host-local policy holds final veto authority.
-- Retain Noise IK cipher suite from ds-harness-remote.
-
-## Rejected Approaches
-### Synchronize full conversation transcripts to server
-Rejected. Violates local-first guarantees and escalates privacy risk.
-
-## Changed Areas
-- packages/remote/observer.ts
-- apps/server/permissions.ts
-- apps/web/live-view.tsx
-
-## Follow-ups
-Evaluate optional interactive collaboration mode in a future version.
-```
-
-## Install
-
-### CLI installation and scheduled archiving
-
-The standalone TypeScript CLI uses [Huihua](https://github.com/wibus-wee/huihua) to collect local sessions from Codex, Claude, Cursor, DeepSeek Harness and other Coding Agents. Requires Node.js **22.18+**.
-
-Install from npm:
-
-```sh
-npm install -g @liguobao/loom-cli@0.1.0
-cd /path/to/project
-loom init --providers codex,claude,deepseek --interval 300
-loom archive --summarizer codex-server     # Summarize with local Codex
-loom schedule install --summarizer codex-server  # Background summaries (macOS / Linux)
-loom schedule status
-```
-
-Use `loom watch --summarizer codex-server` for foreground operation, or select local DSH with `--summarizer dsh` and `loom schedule uninstall` to remove the service. Scans run every 300 seconds by default and select sessions belonging to this workspace or its subdirectories. Redacted Markdown records live in `~/.loom/records/<project>-<workspace-hash>/`. Summaries cover requirements, corrections, chronological key interactions, failures and fixes, decisions, results and follow-ups from all turns. Tool calls, execution results, errors and test evidence distinguish verified work from unverified claims. Changed sessions update their existing record; unchanged sessions are skipped. Original conversations stay local, with no server upload.
-
-See the [CLI guide](packages/cli/README.md) for source installation, custom roots, configuration and Windows scheduling. The CLI is published as `@liguobao/loom-cli`; CI and GitHub Releases also package its tarball.
-
-### Browse local archives
-
-Run `loom serve` and open **http://127.0.0.1:8787** to browse workspaces and their
-Markdown records. Use `--output /path/to/archives` for a custom archive root or
-`--port 9000` for another port. Refresh to see new records; Ctrl+C stops the server.
-
-### Plugin installation
-
-Add the package through DSH's plugin manager for the `web` profile:
+If you already use DeepSeek Harness and want archiving integrated into its runtime, install the plugin:
 
 ```sh
 dsh plugin --profile web add -w @liguobao/dsh-loom@0.1.0
 ```
 
-Restart Harness after installation.
+Restart Harness after installation. The plugin archives locally and shares the CLI's summarization engine. Its configuration and storage behavior are documented in the [DSH plugin guide](packages/client/README.md).
 
-### Web dashboard
+**These are separate choices:** session providers choose what to collect; the summary backend chooses how to summarize; the DSH plugin chooses how to integrate with DSH. Selecting DSH as a provider or summary backend does not make the plugin mandatory.
 
-```sh
-cd apps/web
-pnpm dev
-```
+## Team collaboration and architecture
 
-Visit `http://localhost:5173` to explore project memory, inspect active works, and search past decisions.
+Loom also includes protocol, encryption, indexing and web UI components for a broader team project-memory and read-only observation design. **That design is separate from the standalone local archive workflow described above.** Installing the CLI or plugin does not, by itself, enable live team observation or server-side search.
 
-## End-to-end encryption
+The team design covers owner-authorized observation, host-local veto, server ACLs and end-to-end encrypted live traffic using `Noise_IK_25519_ChaChaPoly_SHA256`. These are collaboration-specific boundaries, not a claim that local Markdown archives are encrypted. The Loom Server is maintained separately as a closed-source project; it is not needed for local archiving. The React dashboard in `apps/web` is also separate from the CLI's built-in local browser.
 
-Loom shares the encryption suite with [ds-harness-remote](https://github.com/liguobao/ds-harness-remote):
-
-- **Suite**: `Noise_IK_25519_ChaChaPoly_SHA256`
-- **Identity**: Pinned static X25519 public keys per device
-- **Handshake**: Initiator (Observer) encrypts to Host static key; Host responds with ephemeral key
-- **Transport**: Independent big-endian monotonic nonce counters with replay rejection
-
-Detailed specifications, key lifecycles, and security boundaries are documented in [End-to-end encryption](docs/end-to-end-encryption.md).
-
-## Repository boundary
-
-This repository houses the open-source client-side ecosystem:
-- `packages/protocol`: Shared types, Zod schemas, and WebSocket contracts.
-- `packages/crypto`: Noise IK cipher implementation and token utilities.
-- `packages/db`: SQLite schema, query routines, and FTS5 search indexer.
-- `packages/distill`: Conversation distillation, Git context extraction, and secret redaction.
-- `packages/cli` (`@liguobao/loom-cli`): Installable TypeScript CLI, Huihua session collection and scheduled local archiving.
-- `packages/client` (`@liguobao/dsh-loom`): DeepSeek Harness local plugin and client integration SDK.
-- `apps/web`: React 19 web application.
-
-The **Loom Server is closed-source** and maintained in a separate repository. Client implementations interface with the server via the standardized [Protocol & API specification](docs/protocol.md).
-
-## Security
-
-- Session traffic is end-to-end encrypted. The relay server cannot read session payloads or private keys.
-- Secret redaction runs locally on the developer machine before records are written or uploaded.
-- Observers cannot execute shell commands, inject agent instructions, or approve tool invocations.
-- Deleting or rebuilding the SQLite database does not compromise Markdown records on disk.
-
-## Documentation
+The following documents describe the DSH-oriented team collaboration design rather than prerequisites for CLI use:
 
 - [Product specification](docs/product.md)
 - [Architecture & three-plane model](docs/architecture.md)
 - [End-to-end encryption](docs/end-to-end-encryption.md)
-- [Storage format specification](docs/storage-format.md)
+- [Team storage format](docs/storage-format.md)
 - [Protocol & API specification](docs/protocol.md)
+
+## Repository layout
+
+| Path | Purpose |
+|---|---|
+| `packages/cli` | Standalone CLI: session collection, scheduled archiving and local browsing |
+| `packages/distill` | Shared semantic summarization, Git context and secret redaction |
+| `packages/client` | Optional DSH plugin and client integration |
+| `packages/protocol` | Shared types, schemas and WebSocket contracts |
+| `packages/crypto` | Noise IK encryption, device keys and token utilities |
+| `packages/db` | SQLite data access and FTS5 indexing for the collaboration stack |
+| `apps/web` | React team dashboard |
+
+## Security and privacy
+
+- Local records are readable Markdown, not encrypted archives. Protect their directory and review records before sharing or committing them.
+- Pattern-based redaction cannot detect every secret. Your selected agent/model provider determines where summary input is processed.
+- Failed or invalid summaries preserve existing records rather than replacing them with transcript excerpts.
+- The local browser listens on `127.0.0.1` only and is read-only; it is not a public sharing service.
 
 ## Star History
 
@@ -243,9 +195,8 @@ The **Loom Server is closed-source** and maintained in a separate repository. Cl
 
 ## Project status and trademarks
 
-This is an independent open-source project designed for the DeepSeek Harness ecosystem.
-DeepSeek and related marks belong to their respective owners.
+Loom is an independent open-source project for local Coding Agent workflows. It is not an official product of any supported agent or model provider. Product names and trademarks belong to their respective owners.
 
 ## License
 
-[MIT](LICENSE)
+MIT

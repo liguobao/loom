@@ -5,7 +5,7 @@ import { fileChangesOf, millisOf } from 'huihua/observe'
 import { generateMarkdown, redactSecrets, type ConversationMessage } from '@loom/distill'
 import { summarizeConversation, type SummaryModel } from './summary.js'
 import { createSummaryModel } from './model.js'
-import { atomicWrite, digest, workspaceId, type Config } from './config.js'
+import { archiveDirectory, atomicWrite, digest, type Config } from './config.js'
 
 const ARCHIVE_FORMAT_VERSION = 4
 interface Entry { fingerprint: string; file: string; createdAt: string; formatVersion?: number }
@@ -87,7 +87,7 @@ async function acquireLock(path: string): Promise<() => Promise<void>> {
   throw new Error('Could not acquire archive lock')
 }
 export async function archiveWorkspace(config: Config, collector: Collector = sessions, summaryModel?: SummaryModel): Promise<ArchiveReport> {
-  const directory = join(config.outputDir, `${basename(config.workspace) || 'workspace'}-${workspaceId(config.workspace)}`)
+  const directory = archiveDirectory(config)
   await mkdir(directory, { recursive: true, mode: 0o700 })
   const unlock = await acquireLock(join(directory, '.lock'))
   const report: ArchiveReport = { archived: 0, unchanged: 0, skipped: 0, failures: [], warnings: [], files: [] }
