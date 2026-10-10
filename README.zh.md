@@ -28,7 +28,7 @@ Loom 不是新 IDE、Agent 编排平台，也不是原始聊天记录同步工�
 
 - **按工作区收集**：识别当前项目及其子目录的本地会话，不把无关项目的对话混入归档。
 - **保留工程上下文**：总结需求、用户纠正、关键交互、问题定位、技术决策、被否决的方案、结果与待办。
-- **结合执行证据**：纳入相关工具结果、报错和测试证据，区分用户要求、Agent 声称完成与实际验证的结果。
+- **结合执行证据**：纳入相关工具结果、报错和测试证据，区分用户要求、Agent 声称完成与实际验证的结果。macOS 下即使终端 `PATH` 没有 `codex`，也会自动探测 ChatGPT.app 内置的 Codex。
 - **增量更新**：同一会话更新同一份 Markdown；未变化的会话跳过总结调用。总结失败时保留已有记录，后续可重试。
 - **手动或自动归档**：支持单次执行、前台持续扫描，以及 macOS/Linux 的工作区级后台服务。
 - **直接阅读和浏览**：可以直接打开 Markdown，也可以通过 CLI 自带的本地只读 Web 服务浏览。
@@ -42,8 +42,8 @@ Loom 不是新 IDE、Agent 编排平台，也不是原始聊天记录同步工�
 npm install -g @liguobao/loom-cli
 cd /path/to/project
 
-# 收集支持的本地会话，并保存当前工作区的总结后端。
-loom init --summarizer codex-server
+# 收集支持的本地会话，默认使用 Codex 生成总结。
+loom init
 
 # 单次生成或更新 Markdown 工作记录。
 loom archive
@@ -89,7 +89,7 @@ loom schedule uninstall
 ### 选择总结 Agent
 
 ```sh
-loom archive --summarizer codex-server
+loom archive                         # 默认：codex-server
 loom archive --summarizer dsh
 ```
 

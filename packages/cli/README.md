@@ -32,8 +32,8 @@ This repository currently ships the tarball through CI and GitHub Releases.
 ```sh
 cd /path/to/project
 loom init --providers codex,claude,deepseek --interval 300
-loom archive --summarizer codex-server
-loom watch --summarizer codex-server
+loom archive                         # Uses codex-server by default
+loom watch                           # Uses codex-server by default
 ```
 
 `init` creates a dedicated `.loom/` directory in the Git repository root. Running
@@ -66,7 +66,7 @@ logs failures and retries on the next scan. Ctrl+C / SIGTERM stops after the cur
 
 ```sh
 loom init --workspace /path/to/project --output /path/to/archives --interval 600
-loom archive --workspace /path/to/project --summarizer codex-server
+loom archive --workspace /path/to/project
 ```
 
 ## Browse archives in a local browser
@@ -102,7 +102,7 @@ or call a summary model; run `loom watch` separately for automatic archiving.
 After creating the config:
 
 ```sh
-loom schedule install --summarizer codex-server
+loom schedule install
 loom schedule status
 loom schedule uninstall
 ```
@@ -149,10 +149,10 @@ config for subsequent runs.
 
 ## Local summarization backend
 
-Choose the local agent when starting the CLI:
+Codex is the default local summary agent. Choose DSH explicitly when needed:
 
 ```sh
-loom archive --summarizer codex-server
+loom archive                         # Default: codex-server
 loom watch --summarizer dsh
 loom watch --summarizer dsh --summary-profile loom-summary
 loom schedule install --summarizer codex-server
@@ -166,10 +166,13 @@ loom schedule install --summarizer codex-server
   `--summary-profile` to select your own headless profile.
 
 `--summary-command /absolute/path` selects the executable when it is not on PATH.
+On macOS, Loom also detects the Codex executable bundled inside ChatGPT.app when
+`codex` is not exposed in the terminal's `PATH`.
 Loom uses local subprocesses; it has no cloud API, API key or hosted model configuration.
 The selected agent's own model/provider configuration remains under your control.
 
-The backend can also be saved with `loom init --summarizer codex-server` or in JSON:
+The backend can also be selected explicitly with `loom init --summarizer codex-server`
+or saved in JSON:
 
 ```json
 "summary": {

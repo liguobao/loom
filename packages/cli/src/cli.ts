@@ -28,7 +28,7 @@ Options:
   --port number        Local browser server port (default: 8787)
   --output path        Archive directory (default: <workspace>/.loom/records)
   --interval seconds   Time between scans (default: 300, range: 1..86400)
-  --summarizer backend Local summary backend: codex-server or dsh
+  --summarizer backend Local summary backend: codex-server or dsh (default: codex-server)
   --summary-command p  Executable path (default: codex or dsh)
   --summary-profile p  DSH headless profile (default: headless)
   --config file        JSON configuration; init writes to this path
@@ -69,10 +69,11 @@ async function main(): Promise<void> {
   const workspace = await resolveWorkspace(values.workspace || process.cwd())
   const configPath = resolve(values.config || (command === 'init' ? undefined : await findConfigPath(workspace)) || defaultConfigPath(workspace))
   const summaryOverride = (existing: Config['summary']): Config['summary'] => {
-    if (!values.summarizer && !values['summary-command'] && !values['summary-profile']) return existing
-    const provider = values.summarizer || existing?.provider
+    const base = existing || { provider: 'codex-server' as const }
+    if (!values.summarizer && !values['summary-command'] && !values['summary-profile']) return base
+    const provider = values.summarizer || base.provider
     if (provider !== 'codex-server' && provider !== 'dsh') throw new Error('--summarizer must be codex-server or dsh')
-    return { ...(provider === existing?.provider ? existing : {}), provider,
+    return { ...(provider === base.provider ? base : {}), provider,
       ...(values['summary-command'] ? { command: values['summary-command'] } : {}),
       ...(values['summary-profile'] ? { profile: values['summary-profile'] } : {}),
     }
@@ -90,7 +91,7 @@ async function main(): Promise<void> {
       intervalSeconds: Number(values.interval || 300), summary: summaryOverride(undefined) })
     await mkdir(config.outputDir, { recursive: true, mode: 0o700 })
     await saveConfig(configPath, config)
-    console.log(`Created ${configPath}\nArchives: ${config.outputDir}\nRun loom archive --summarizer codex-server, or use --summarizer dsh.\nBrowse with loom server.`)
+    console.log(`Created ${configPath}\nArchives: ${config.outputDir}\nRun loom archive (default summarizer: codex-server), or use --summarizer dsh.\nBrowse with loom server.`)
     return
   }
   try { config = await loadConfig(configPath) }

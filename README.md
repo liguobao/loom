@@ -28,7 +28,7 @@ Loom is not an IDE, an Agent orchestration platform or a raw transcript synchron
 
 - **Collects by workspace**: Finds local sessions for the current project and its subdirectories, rather than mixing unrelated conversations into one archive.
 - **Preserves engineering context**: Summarizes requirements, user corrections, key interactions, investigations, decisions, rejected approaches, outcomes and follow-ups.
-- **Uses execution evidence**: Includes relevant tool results, errors and test evidence, distinguishing requested work and agent claims from verified results.
+- **Uses execution evidence**: Includes relevant tool results, errors and test evidence, distinguishing requested work and agent claims from verified results. On macOS, it can detect the Codex executable bundled inside ChatGPT.app even when `codex` is not on `PATH`.
 - **Updates incrementally**: Changed sessions update their existing Markdown record; unchanged sessions skip summary calls. Failed summaries preserve existing records and can be retried.
 - **Runs once or in the background**: Archive on demand, watch in the foreground or install a per-workspace background service on macOS/Linux.
 - **Keeps records accessible**: Read Markdown directly or browse it through the CLI's local, read-only web server.
@@ -42,8 +42,8 @@ Requires **Node.js 22.18+** and an installed, configured local summary agent: **
 npm install -g @liguobao/loom-cli
 cd /path/to/project
 
-# Collect supported local sessions and save the summary backend for this workspace.
-loom init --summarizer codex-server
+# Collect supported local sessions and use Codex as the default summary backend.
+loom init
 
 # Generate or update Markdown work records once.
 loom archive
@@ -89,7 +89,7 @@ The default interval is 300 seconds after each completed scan. `watch` and sched
 ### Choose a summary agent
 
 ```sh
-loom archive --summarizer codex-server
+loom archive                         # Default: codex-server
 loom archive --summarizer dsh
 ```
 

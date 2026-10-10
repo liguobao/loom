@@ -27,7 +27,17 @@ export function validateSummaryConfig(value: unknown): SummaryConfig {
 export async function resolveSummaryCommand(config: SummaryConfig): Promise<SummaryConfig> {
   const name = config.command || (config.provider === 'codex-server' ? 'codex' : 'dsh')
   const candidates = isAbsolute(name) || name.includes(sep)
-    ? [resolve(name)] : (process.env.PATH || '').split(delimiter).map(directory => join(directory, name))
+    ? [resolve(name)]
+    : (process.env.PATH || '').split(delimiter).map(directory => join(directory, name))
+  if (!config.command && config.provider === 'codex-server') {
+    const bundled = [
+      process.env.CODEX_BIN,
+      process.env.CODEX_PATH,
+      join('/Applications', 'ChatGPT.app', 'Contents', 'Resources', 'codex-cli', 'CodexCLI.app', 'Contents', 'MacOS', 'codex'),
+      join(homedir(), 'Applications', 'ChatGPT.app', 'Contents', 'Resources', 'codex-cli', 'CodexCLI.app', 'Contents', 'MacOS', 'codex'),
+    ].filter((candidate): candidate is string => Boolean(candidate))
+    candidates.push(...bundled)
+  }
   for (const candidate of candidates) {
     try { await access(candidate, constants.X_OK); return { ...config, command: await realpath(candidate) } } catch { /* try next PATH entry */ }
   }
@@ -49,7 +59,8 @@ export function createSummaryModel(config: SummaryConfig | undefined): SummaryMo
     // Keep generated agent sessions outside the workspace being collected.
     const cwd = join(resolve(process.env.LOOM_HOME || join(homedir(), '.loom')), 'summary-runtime')
     await mkdir(cwd, { recursive: true, mode: 0o700 })
-    const command = config.command || (config.provider === 'codex-server' ? 'codex' : 'dsh')
+    const resolved = await resolveSummaryCommand(config)
+    const command = resolved.command!
     const args = config.provider === 'codex-server'
       ? ['app-server', '--stdio', ...(config.args ?? [])]
       : ['--profile', config.profile || 'headless', ...(config.args ?? []), '--json']

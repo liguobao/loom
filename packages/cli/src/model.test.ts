@@ -57,7 +57,7 @@ process.stdin.on('end', () => {
     expect(captured.runtime).toBe('1')
   })
   it.skipIf(process.platform === 'win32')('fails missing executables, nonzero exits and timeouts', async () => {
-    await expect(createSummaryModel({ provider: 'dsh', command: '/nonexistent/loom-agent' })('S', 'I')).rejects.toThrow('Cannot start')
+    await expect(createSummaryModel({ provider: 'dsh', command: '/nonexistent/loom-agent' })('S', 'I')).rejects.toThrow('executable not found')
     const failed = await executable("process.stdout.write(JSON.stringify({type:'final',text:'unverified'})+'\\n');process.exit(1)")
     await expect(createSummaryModel({ provider: 'dsh', command: failed.path })('S', 'I')).rejects.toThrow('failed')
     const stalled = await executable('setInterval(()=>{},1000)')
